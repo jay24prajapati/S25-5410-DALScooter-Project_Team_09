@@ -732,11 +732,11 @@ Resources:
           import os
           import uuid
           from datetime import datetime, timedelta
-          
+
           dynamodb = boto3.resource('dynamodb')
           cognito = boto3.client('cognito-idp')
           sns = boto3.client('sns')
-          
+
           def lambda_handler(event, context):
               print(f"Auth event: {json.dumps(event)}")
               
@@ -759,8 +759,10 @@ Resources:
                       
               except Exception as e:
                   print(f"Auth error: {str(e)}")
+                  import traceback
+                  print(f"Traceback: {traceback.format_exc()}")
                   return response_with_cors(500, {'error': 'Internal server error'})
-          
+
           def handle_cognito_auth(body):
               username = body.get('username', '').strip().lower()
               password = body.get('password', '')
@@ -835,8 +837,10 @@ Resources:
                   return response_with_cors(401, {'error': 'User account not confirmed. Please verify your email first.'})
               except Exception as e:
                   print(f"Cognito auth error: {str(e)}")
+                  import traceback
+                  print(f"Traceback: {traceback.format_exc()}")
                   return response_with_cors(401, {'error': 'Authentication failed'})
-          
+
           def handle_security_question(body):
               session_id = body.get('sessionId', '')
               user_id = body.get('userId', '')
@@ -885,7 +889,7 @@ Resources:
                   })
               else:
                   return response_with_cors(401, {'error': 'Incorrect security answer'})
-          
+
           def handle_caesar_cipher(body):
               session_id = body.get('sessionId', '')
               user_id = body.get('userId', '')
@@ -930,6 +934,7 @@ Resources:
                   
                   print(f"Step 3 authentication successful for user: {user_id}")
                   
+                  # Return both access and ID tokens
                   return response_with_cors(200, {
                       'message': 'Authentication successful - All factors verified',
                       'authComplete': True,
@@ -937,11 +942,13 @@ Resources:
                       'userId': user_id,
                       'userType': user_data['userType'],
                       'email': user_data['email'],
-                      'accessToken': session_data['cognitoTokens']['accessToken']
+                      'accessToken': session_data['cognitoTokens']['accessToken'],
+                      'idToken': session_data['cognitoTokens']['idToken'],
+                      'refreshToken': session_data['cognitoTokens']['refreshToken']
                   })
               else:
                   return response_with_cors(401, {'error': f'Incorrect Caesar cipher answer. Expected: {correct_answer}'})
-          
+
           def send_login_notification(user_data):
               try:
                   topic_arn = os.environ.get('LOGIN_TOPIC_ARN', '')
@@ -971,7 +978,7 @@ Resources:
                   
               except Exception as e:
                   print(f"Error sending login notification: {str(e)}")
-          
+
           def response_with_cors(status_code, body):
               return {
                   'statusCode': status_code,
@@ -1411,6 +1418,18 @@ Outputs:
     Value: !Sub 'https://${DALScooterAPI}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
     Export:
       Name: !Sub '${AWS::StackName}-APIGatewayURL'
+
+  APIGatewayId:
+    Description: 'API Gateway ID for cross-stack reference'
+    Value: !Ref DALScooterAPI
+    Export:
+      Name: !Sub '${AWS::StackName}-APIGatewayId'
+
+  APIGatewayRootResourceId:
+    Description: 'API Gateway Root Resource ID for cross-stack reference'
+    Value: !GetAtt DALScooterAPI.RootResourceId
+    Export:
+      Name: !Sub '${AWS::StackName}-APIGatewayRootResourceId'
 
   CognitoUserPoolId:
     Description: 'Cognito User Pool ID'
