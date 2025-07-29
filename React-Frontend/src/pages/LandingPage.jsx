@@ -122,7 +122,7 @@ const LandingPage = () => {
     }
 
     const handleGetStarted = () => {
-        navigate('/auth')
+        navigate('/register')
     }
 
     return (
