@@ -1,226 +1,237 @@
 import React, { useState } from 'react';
+import axios from 'axios';
 
-// LoginStep1 Component
-function LoginStep1({ email, password, setEmail, setPassword, onNext }) {
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (email && password) {
-      onNext();
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="text-center mb-6">
-        <div className="flex items-center justify-center space-x-2 mb-4">
-          <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center font-bold">1</div>
-          <div className="w-12 h-1 bg-blue-200"></div>
-          <div className="w-8 h-8 bg-blue-200 text-blue-400 rounded-full flex items-center justify-center font-bold">2</div>
-          <div className="w-12 h-1 bg-blue-200"></div>
-          <div className="w-8 h-8 bg-blue-200 text-blue-400 rounded-full flex items-center justify-center font-bold">3</div>
-        </div>
-        <p className="text-blue-600 font-medium">Enter your credentials</p>
-      </div>
-
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <label className="block text-sm font-semibold text-blue-700">Email</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="w-full px-4 py-3 border-2 border-blue-200 rounded-lg focus:border-blue-500 focus:outline-none transition-colors bg-blue-50/30 text-gray-800 placeholder-blue-300"
-            placeholder="Enter your email"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <label className="block text-sm font-semibold text-blue-700">Password</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            className="w-full px-4 py-3 border-2 border-blue-200 rounded-lg focus:border-blue-500 focus:outline-none transition-colors bg-blue-50/30 text-gray-800 placeholder-blue-300"
-            placeholder="Enter your password"
-          />
-        </div>
-      </div>
-
-      <button
-        onClick={handleSubmit}
-        className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
-      >
-        Continue
-      </button>
-    </div>
-  );
-}
-
-// LoginStep2 Component
-function LoginStep2({ question, answer, setAnswer, onNext }) {
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (answer) {
-      onNext();
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="text-center mb-6">
-        <div className="flex items-center justify-center space-x-2 mb-4">
-          <div className="w-8 h-8 bg-blue-300 text-white rounded-full flex items-center justify-center font-bold">✓</div>
-          <div className="w-12 h-1 bg-blue-300"></div>
-          <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center font-bold">2</div>
-          <div className="w-12 h-1 bg-blue-200"></div>
-          <div className="w-8 h-8 bg-blue-200 text-blue-400 rounded-full flex items-center justify-center font-bold">3</div>
-        </div>
-        <p className="text-blue-600 font-medium">Answer security question</p>
-      </div>
-
-      <div className="space-y-4">
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-blue-800 font-medium">{question}</p>
-        </div>
-
-        <div className="space-y-2">
-          <label className="block text-sm font-semibold text-blue-700">Your Answer</label>
-          <input
-            type="text"
-            value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
-            required
-            className="w-full px-4 py-3 border-2 border-blue-200 rounded-lg focus:border-blue-500 focus:outline-none transition-colors bg-blue-50/30 text-gray-800 placeholder-blue-300"
-            placeholder="Enter your answer"
-          />
-        </div>
-      </div>
-
-      <button
-        onClick={handleSubmit}
-        className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
-      >
-        Continue
-      </button>
-    </div>
-  );
-}
-
-// LoginStep3 Component
-function LoginStep3({ encryptedText, decodedWord, setDecodedWord, onComplete }) {
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (decodedWord) {
-      onComplete();
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="text-center mb-6">
-        <div className="flex items-center justify-center space-x-2 mb-4">
-          <div className="w-8 h-8 bg-blue-300 text-white rounded-full flex items-center justify-center font-bold">✓</div>
-          <div className="w-12 h-1 bg-blue-300"></div>
-          <div className="w-8 h-8 bg-blue-300 text-white rounded-full flex items-center justify-center font-bold">✓</div>
-          <div className="w-12 h-1 bg-blue-300"></div>
-          <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center font-bold">3</div>
-        </div>
-        <p className="text-blue-600 font-medium">Decode the encrypted text</p>
-      </div>
-
-      <div className="space-y-4">
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-sm text-blue-600 mb-2">Encrypted Text:</p>
-          <p className="text-xl font-mono font-bold text-blue-800 tracking-widest">{encryptedText}</p>
-        </div>
-
-        <div className="space-y-2">
-          <label className="block text-sm font-semibold text-blue-700">Decoded Word</label>
-          <input
-            type="text"
-            value={decodedWord}
-            onChange={(e) => setDecodedWord(e.target.value)}
-            required
-            className="w-full px-4 py-3 border-2 border-blue-200 rounded-lg focus:border-blue-500 focus:outline-none transition-colors bg-blue-50/30 text-gray-800 placeholder-blue-300"
-            placeholder="Enter the decoded word"
-          />
-        </div>
-
-        <div className="bg-blue-50 border-l-4 border-blue-400 p-3">
-          <p className="text-xs text-blue-600">
-            Hint: This appears to be a Caesar cipher. Try shifting each letter by a certain number of positions.
-          </p>
-        </div>
-      </div>
-
-      <button
-        onClick={handleSubmit}
-        className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
-      >
-        Complete Login
-      </button>
-    </div>
-  );
-}
-
-// Main LoginPage Component
 export default function LoginPage() {
   const [step, setStep] = useState(1);
-
-  // Step 1 state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-
-  // Step 2 state
   const [securityAnswer, setSecurityAnswer] = useState('');
-  const securityQuestion = "What is your pet's name?"; // Replace with dynamic if needed
-
-  // Step 3 state
   const [decodedWord, setDecodedWord] = useState('');
-  const encryptedText = 'JXU EHTYZ'; // Replace with backend-generated challenge
+  const [sessionId, setSessionId] = useState('');
+  const [userId, setUserId] = useState('');
+  const [securityQuestion, setSecurityQuestion] = useState('');
+  const [caesarChallenge, setCaesarChallenge] = useState('');
+  const [accessToken, setAccessToken] = useState('');
 
-  const handleNext = () => setStep((prev) => prev + 1);
-  const handleComplete = () => {
-    alert('Authentication Successful!');
-    // redirect or show success
+  const API_BASE = "https://288cs0y4la.execute-api.us-east-1.amazonaws.com/dev/auth";
+
+  const handleStep1 = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await axios.post(`${API_BASE}/login`, {
+        step: 1,
+        username: email,
+        password,
+      });
+      const data = res.data;
+      setSessionId(data.sessionId);
+      setUserId(data.userId);
+      setSecurityQuestion(data.securityQuestion);
+      setStep(data.nextStep);
+    } catch (err) {
+      alert('Step 1 failed: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const handleStep2 = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await axios.post(`${API_BASE}/login`, {
+        step: 2,
+        sessionId,
+        userId,
+        securityAnswer,
+      });
+      const data = res.data;
+      setSessionId(data.sessionId);
+      setCaesarChallenge(data.caesarChallenge);
+      setStep(data.nextStep);
+    } catch (err) {
+      alert('Step 2 failed: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const handleStep3 = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await axios.post(`${API_BASE}/login`, {
+        step: 3,
+        sessionId,
+        userId,
+        caesarAnswer: decodedWord,
+      });
+      const data = res.data;
+      setAccessToken(data.accessToken);
+      localStorage.setItem('token', data.accessToken);
+      alert('Login successful!');
+      window.location.href = data.userType === 'franchise'
+        ? '/franchise-dashboard'
+        : '/customer-dashboard';
+    } catch (err) {
+      alert('Step 3 failed: ' + (err.response?.data?.message || err.message));
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl p-8 w-full max-w-md border border-blue-200">
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-blue-800 mb-2">3-Factor Login</h2>
-          <div className="w-16 h-1 bg-gradient-to-r from-blue-400 to-blue-600 mx-auto rounded-full"></div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-blue-100 to-blue-200 flex items-center justify-center px-4 py-8">
+      <div className="bg-white p-10 rounded-3xl shadow-2xl w-full max-w-lg border border-blue-200 relative overflow-hidden">
+        
+        {/* Background decoration */}
+        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-200 to-blue-300 opacity-20 rounded-full -mr-16 -mt-16"></div>
+        <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-blue-200 to-blue-300 opacity-20 rounded-full -ml-12 -mb-12"></div>
+        
+        {/* Header */}
+        <div className="text-center mb-8 relative z-10">
+          <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+            <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+          <h2 className="text-4xl font-bold text-blue-800 mb-3">3-Factor Login</h2>
+          <div className="w-20 h-1 bg-gradient-to-r from-blue-400 to-blue-600 mx-auto rounded-full"></div>
+          <p className="text-blue-600 text-sm mt-3">Secure authentication system</p>
         </div>
 
+        {/* Progress Steps */}
+        <div className="flex items-center justify-center space-x-4 mb-10 relative z-10">
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold shadow-lg transition-all duration-300 ${
+            step >= 1 ? 'bg-blue-500 text-white' : 'bg-blue-100 text-blue-400 border border-blue-200'
+          }`}>
+            {step > 1 ? '✓' : '1'}
+          </div>
+          <div className={`w-16 h-1 rounded-full ${step > 1 ? 'bg-blue-400' : 'bg-blue-200'}`}></div>
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold shadow-lg transition-all duration-300 ${
+            step >= 2 ? 'bg-blue-500 text-white' : 'bg-blue-100 text-blue-400 border border-blue-200'
+          }`}>
+            {step > 2 ? '✓' : '2'}
+          </div>
+          <div className={`w-16 h-1 rounded-full ${step > 2 ? 'bg-blue-400' : 'bg-blue-200'}`}></div>
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold shadow-lg transition-all duration-300 ${
+            step >= 3 ? 'bg-blue-500 text-white' : 'bg-blue-100 text-blue-400 border border-blue-200'
+          }`}>
+            3
+          </div>
+        </div>
+
+        {/* Step 1 */}
         {step === 1 && (
-          <LoginStep1
-            email={email}
-            password={password}
-            setEmail={setEmail}
-            setPassword={setPassword}
-            onNext={handleNext}
-          />
+          <form onSubmit={handleStep1} className="space-y-6 relative z-10">
+            <div className="text-center mb-6">
+              <p className="text-blue-600 font-semibold">Enter your credentials</p>
+            </div>
+            <div className="space-y-5">
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
+                  </svg>
+                </div>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  placeholder="Email"
+                  className="w-full pl-12 pr-4 py-4 border-2 border-blue-200 rounded-xl focus:border-blue-500 focus:outline-none transition-all bg-blue-50/30 text-gray-800 placeholder-blue-400 shadow-sm"
+                />
+              </div>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </div>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  placeholder="Password"
+                  className="w-full pl-12 pr-4 py-4 border-2 border-blue-200 rounded-xl focus:border-blue-500 focus:outline-none transition-all bg-blue-50/30 text-gray-800 placeholder-blue-400 shadow-sm"
+                />
+              </div>
+            </div>
+            <button
+              type="submit"
+              className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold py-4 px-6 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+            >
+              Next
+            </button>
+          </form>
         )}
 
+        {/* Step 2 */}
         {step === 2 && (
-          <LoginStep2
-            question={securityQuestion}
-            answer={securityAnswer}
-            setAnswer={setSecurityAnswer}
-            onNext={handleNext}
-          />
+          <form onSubmit={handleStep2} className="space-y-6 relative z-10">
+            <div className="text-center mb-6">
+              <p className="text-blue-600 font-semibold">Answer security question</p>
+            </div>
+            <div className="space-y-5">
+              <div className="bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-200 rounded-xl p-5 shadow-sm">
+                <div className="flex items-center">
+                  <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center mr-3">
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <p className="text-blue-800 font-semibold">{securityQuestion}</p>
+                </div>
+              </div>
+              <input
+                type="text"
+                value={securityAnswer}
+                onChange={(e) => setSecurityAnswer(e.target.value)}
+                required
+                placeholder="Your Answer"
+                className="w-full px-4 py-4 border-2 border-blue-200 rounded-xl focus:border-blue-500 focus:outline-none transition-all bg-blue-50/30 text-gray-800 placeholder-blue-400 shadow-sm"
+              />
+            </div>
+            <button
+              type="submit"
+              className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold py-4 px-6 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+            >
+              Next
+            </button>
+          </form>
         )}
 
+        {/* Step 3 */}
         {step === 3 && (
-          <LoginStep3
-            encryptedText={encryptedText}
-            decodedWord={decodedWord}
-            setDecodedWord={setDecodedWord}
-            onComplete={handleComplete}
-          />
+          <form onSubmit={handleStep3} className="space-y-6 relative z-10">
+            <div className="text-center mb-6">
+              <p className="text-blue-600 font-semibold">Decode the encrypted text</p>
+            </div>
+            <div className="space-y-5">
+              <div className="bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-200 rounded-xl p-5 shadow-sm">
+                <p className="text-sm text-blue-600 mb-2 font-medium">Encrypted Text:</p>
+                <p className="text-2xl font-mono font-bold text-blue-800 tracking-widest text-center py-2">{caesarChallenge}</p>
+              </div>
+              <input
+                type="text"
+                value={decodedWord}
+                onChange={(e) => setDecodedWord(e.target.value.toUpperCase())}
+                required
+                placeholder="Decoded Word"
+                className="w-full px-4 py-4 border-2 border-blue-200 rounded-xl focus:border-blue-500 focus:outline-none transition-all bg-blue-50/30 text-gray-800 placeholder-blue-400 shadow-sm text-center font-mono tracking-wider text-lg"
+              />
+              <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-xl">
+                <div className="flex items-center">
+                  <svg className="w-5 h-5 text-blue-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                  <p className="text-sm text-blue-700">
+                    Hint: This appears to be a Caesar cipher. Try shifting each letter by a certain number of positions.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <button
+              type="submit"
+              className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-4 px-6 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+            >
+              Complete Login
+            </button>
+          </form>
         )}
       </div>
     </div>

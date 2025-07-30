@@ -6,6 +6,8 @@ import AuthPage from './pages/AuthPage';
 import RegisterPage from './pages/RegisterPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
 import LoginPage from './pages/LoginPage';
+import FranchiseDashboard from './pages/FranchiseDashboard.JSX';
+
 
 function App() {
     return (
@@ -17,6 +19,7 @@ function App() {
                 <Route path="/register" element={<RegisterPage />} />
                 <Route path="/verify-email" element={<VerifyEmailPage />} />
                 <Route path="/login" element={<LoginPage />} />
+                <Route path="/franchise-dashboard" element={<FranchiseDashboard />} />
             </Routes>
         </div>
     )
