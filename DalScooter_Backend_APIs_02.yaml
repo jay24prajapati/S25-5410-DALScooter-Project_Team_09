@@ -1,48 +1,36 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'DALScooter Backend APIs Implementation - Franchise Side (Bike, Send Message) and Customer Side (Bike Booking Management, Feedback, Send Message)'
+Description: 'DALScooter Backend APIs - Simplified with Real-time Inventory & Automatic Booking'
 
 Parameters:
   ProjectName:
     Type: String
     Default: 'DALScooter'
     Description: 'Project name for resource naming'
-  
   Environment:
     Type: String
     Default: 'dev'
-    AllowedValues: 
-      - dev
-      - prod
+    AllowedValues: [dev, prod]
     Description: 'Environment name'
-
+  
   # Import from Module 1 (Auth Module)
   UsersTableName:
     Type: String
     Description: 'Users table name from Module 1'
-    
   UserSessionsTableName:
     Type: String
     Description: 'User Sessions table name from Module 1'
-    
   APIGatewayId:
     Type: String
     Description: 'API Gateway ID from Module 1'
-    
   APIGatewayRootResourceId:
     Type: String
     Description: 'API Gateway Root Resource ID from Module 1'
-
   CognitoUserPoolId:
     Type: String
     Description: 'Cognito User Pool ID from Module 1'
 
-  CognitoUserPoolClientId:
-    Type: String
-    Description: 'Cognito User Pool Client ID from Module 1'
-
 Resources:
   # COGNITO AUTHORIZER
-  
   CognitoAuthorizer:
     Type: AWS::ApiGateway::Authorizer
     Properties:
@@ -50,11 +38,10 @@ Resources:
       Type: COGNITO_USER_POOLS
       IdentitySource: method.request.header.Authorization
       RestApiId: !Ref APIGatewayId
-      ProviderARNs: 
+      ProviderARNs:
         - !Sub 'arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPoolId}'
 
-  # DYNAMODB TABLES 
-  
+  # DYNAMODB TABLES
   BikesTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -91,15 +78,13 @@ Resources:
               KeyType: HASH
           Projection:
             ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
-      SSESpecification:
-        SSEEnabled: true
       Tags:
         - Key: Project
           Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
 
   BookingsTable:
     Type: AWS::DynamoDB::Table
@@ -155,15 +140,13 @@ Resources:
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
-      SSESpecification:
-        SSEEnabled: true
       Tags:
         - Key: Project
           Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
 
   FeedbackTable:
     Type: AWS::DynamoDB::Table
@@ -209,15 +192,9 @@ Resources:
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: true
-      SSESpecification:
-        SSEEnabled: true
       Tags:
         - Key: Project
           Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
 
   MessagesTable:
     Type: AWS::DynamoDB::Table
@@ -234,8 +211,6 @@ Resources:
         - AttributeName: customer_id
           AttributeType: S
         - AttributeName: franchise_id
-          AttributeType: S
-        - AttributeName: conversation_id
           AttributeType: S
       KeySchema:
         - AttributeName: message_id
@@ -265,156 +240,69 @@ Resources:
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
-        - IndexName: ConversationMessages
-          KeySchema:
-            - AttributeName: conversation_id
-              KeyType: HASH
-            - AttributeName: createdAt
-              KeyType: RANGE
-          Projection:
-            ProjectionType: ALL
       TimeToLiveSpecification:
         AttributeName: ttl
         Enabled: true
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: true
-      SSESpecification:
-        SSEEnabled: true
       Tags:
         - Key: Project
           Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
 
-  # Table for Cancellation Requests
-  CancellationRequestsTable:
+  BikeInventoryTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub '${ProjectName}-CancellationRequests-${Environment}'
+      TableName: !Sub '${ProjectName}-BikeInventory-${Environment}'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: cancellation_id
+        - AttributeName: bike_id
           AttributeType: S
-        - AttributeName: booking_id
-          AttributeType: S
-        - AttributeName: franchise_id
-          AttributeType: S
-        - AttributeName: status
-          AttributeType: S
-        - AttributeName: createdAt
+        - AttributeName: date
           AttributeType: S
       KeySchema:
-        - AttributeName: cancellation_id
+        - AttributeName: bike_id
           KeyType: HASH
-      GlobalSecondaryIndexes:
-        - IndexName: BookingCancellations
-          KeySchema:
-            - AttributeName: booking_id
-              KeyType: HASH
-          Projection:
-            ProjectionType: ALL
-        - IndexName: FranchiseCancellations
-          KeySchema:
-            - AttributeName: franchise_id
-              KeyType: HASH
-            - AttributeName: createdAt
-              KeyType: RANGE
-          Projection:
-            ProjectionType: ALL
-        - IndexName: CancellationStatusIndex
-          KeySchema:
-            - AttributeName: status
-              KeyType: HASH
-            - AttributeName: createdAt
-              KeyType: RANGE
-          Projection:
-            ProjectionType: ALL
-      TimeToLiveSpecification:
-        AttributeName: ttl
-        Enabled: true
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: true
-      SSESpecification:
-        SSEEnabled: true
+        - AttributeName: date
+          KeyType: RANGE
       Tags:
         - Key: Project
           Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
 
-  # SQS QUEUES 
-  
-  BookingRequestQueue:
+  # SNS TOPICS
+  BookingNotificationsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${ProjectName}-BookingNotifications-${Environment}'
+      DisplayName: 'DALScooter Booking Notifications'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  InventoryUpdatesTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${ProjectName}-InventoryUpdates-${Environment}'
+      DisplayName: 'DALScooter Inventory Updates'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # SQS QUEUES
+  BookingProcessingQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub '${ProjectName}-BookingRequest-Queue-${Environment}'
+      QueueName: !Sub '${ProjectName}-BookingProcessing-Queue-${Environment}'
       VisibilityTimeout: 300
       MessageRetentionPeriod: 1209600
       RedrivePolicy:
-        deadLetterTargetArn: !GetAtt BookingRequestDLQ.Arn
+        deadLetterTargetArn: !GetAtt BookingProcessingDLQ.Arn
         maxReceiveCount: 3
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
 
-  BookingRequestDLQ:
+  BookingProcessingDLQ:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub '${ProjectName}-BookingRequest-DLQ-${Environment}'
+      QueueName: !Sub '${ProjectName}-BookingProcessing-DLQ-${Environment}'
       MessageRetentionPeriod: 1209600
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
 
-  # SNS TOPICS
-  
-  CustomerNotificationsTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName: !Sub '${ProjectName}-CustomerNotifications-${Environment}'
-      DisplayName: 'DALScooter Customer Notifications'
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-
-  FranchiseNotificationsTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName: !Sub '${ProjectName}-FranchiseNotifications-${Environment}'
-      DisplayName: 'DALScooter Franchise Notifications'
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-
-  # CLOUDWATCH LOG GROUPS 
-  
-  PublicBikesLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/aws/lambda/${ProjectName}-PublicBikes-${Environment}'
-      RetentionInDays: 14
-
-  UnifiedAPILogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/aws/lambda/${ProjectName}-UnifiedAPI-${Environment}'
-      RetentionInDays: 14
-
-  BookingProcessorLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/aws/lambda/${ProjectName}-BookingProcessor-${Environment}'
-      RetentionInDays: 14
-
-  #  LAMBDA FUNCTIONS 
+  # LAMBDA FUNCTIONS
 
   # Public APIs for Guest Users
   PublicBikesFunction:
@@ -429,6 +317,7 @@ Resources:
       Environment:
         Variables:
           BIKES_TABLE: !Ref BikesTable
+          BIKE_INVENTORY_TABLE: !Ref BikeInventoryTable
           BOOKINGS_TABLE: !Ref BookingsTable
           FEEDBACK_TABLE: !Ref FeedbackTable
       Code:
@@ -436,14 +325,13 @@ Resources:
           import json
           import boto3
           import os
-          from datetime import datetime
+          from datetime import datetime, date
           from boto3.dynamodb.conditions import Key
           
           dynamodb = boto3.resource('dynamodb')
           
           def lambda_handler(event, context):
               print(f"Public bikes event: {json.dumps(event)}")
-              
               try:
                   http_method = event.get('httpMethod', 'GET')
                   path = event.get('path', '')
@@ -464,11 +352,11 @@ Resources:
           
           def get_bikes(query_params):
               try:
-                  date = query_params.get('date')
+                  booking_date = query_params.get('date', date.today().isoformat())
                   bike_type = query_params.get('type')
                   
                   bikes_table = dynamodb.Table(os.environ['BIKES_TABLE'])
-                  bookings_table = dynamodb.Table(os.environ['BOOKINGS_TABLE'])
+                  inventory_table = dynamodb.Table(os.environ['BIKE_INVENTORY_TABLE'])
                   
                   # Query bikes
                   if bike_type:
@@ -487,40 +375,36 @@ Resources:
                   
                   result = []
                   for bike in bikes_response['Items']:
+                      # Get availability
+                      inventory_response = inventory_table.get_item(
+                          Key={
+                              'bike_id': bike['bike_id'],
+                              'date': booking_date
+                          }
+                      )
+                      
+                      total_count = int(bike['count'])
+                      booked_count = 0
+                      
+                      if 'Item' in inventory_response:
+                          booked_count = int(inventory_response['Item'].get('booked_count', 0))
+                      
+                      available_count = total_count - booked_count
+                      
                       bike_data = {
                           'bike_id': bike['bike_id'],
                           'type': bike['type'],
                           'dailyRate': float(bike['dailyRate']),
                           'features': bike.get('features', {}),
-                          'count': int(bike['count']),
-                          'available': True
+                          'totalCount': total_count,
+                          'availableCount': max(0, available_count),
+                          'available': available_count > 0
                       }
-                      
-                      # Check availability for specific date
-                      if date:
-                          try:
-                              datetime.strptime(date, '%Y-%m-%d')
-                              bookings_response = bookings_table.query(
-                                  IndexName='BikeBookings',
-                                  KeyConditionExpression=Key('bike_id').eq(bike['bike_id']) & Key('date').eq(date),
-                                  FilterExpression='#status IN (:confirmed, :pending)',
-                                  ExpressionAttributeNames={'#status': 'status'},
-                                  ExpressionAttributeValues={
-                                      ':confirmed': 'CONFIRMED',
-                                      ':pending': 'PENDING'
-                                  }
-                              )
-                              
-                              booked_count = len(bookings_response['Items'])
-                              available_count = int(bike['count']) - booked_count
-                              bike_data['available'] = available_count > 0
-                              bike_data['availableCount'] = available_count
-                          except ValueError:
-                              return response_with_cors(400, {'error': 'Invalid date format. Use YYYY-MM-DD'})
                       
                       result.append(bike_data)
                   
                   return response_with_cors(200, result)
+                  
               except Exception as e:
                   print(f"Error getting bikes: {str(e)}")
                   return response_with_cors(500, {'error': 'Database query failed'})
@@ -563,7 +447,6 @@ Resources:
                       if sentiment in sentiment_counts:
                           sentiment_counts[sentiment] += 1
                   
-                  # Calculate overall statistics
                   average_rating = round(total_rating / len(feedback_list), 1) if feedback_list else 0
                   total_feedback = len(feedback_list)
                   
@@ -576,6 +459,7 @@ Resources:
                           'sentimentBreakdown': sentiment_counts
                       }
                   })
+                  
               except Exception as e:
                   print(f"Error getting bike feedback: {str(e)}")
                   return response_with_cors(500, {'error': 'Database query failed'})
@@ -608,18 +492,18 @@ Resources:
           BOOKINGS_TABLE: !Ref BookingsTable
           FEEDBACK_TABLE: !Ref FeedbackTable
           MESSAGES_TABLE: !Ref MessagesTable
-          CANCELLATION_REQUESTS_TABLE: !Ref CancellationRequestsTable
+          BIKE_INVENTORY_TABLE: !Ref BikeInventoryTable
           USERS_TABLE: !Ref UsersTableName
-          BOOKING_QUEUE_URL: !Ref BookingRequestQueue
-          CUSTOMER_NOTIFICATIONS_TOPIC: !Ref CustomerNotificationsTopic
-          FRANCHISE_NOTIFICATIONS_TOPIC: !Ref FranchiseNotificationsTopic
+          BOOKING_PROCESSING_QUEUE_URL: !Ref BookingProcessingQueue
+          BOOKING_NOTIFICATIONS_TOPIC: !Ref BookingNotificationsTopic
+          INVENTORY_UPDATES_TOPIC: !Ref InventoryUpdatesTopic
       Code:
         ZipFile: |
           import json
           import boto3
           import uuid
           import os
-          from datetime import datetime, timedelta
+          from datetime import datetime, timedelta, date
           from boto3.dynamodb.conditions import Key, Attr
           import random
           import string
@@ -631,54 +515,42 @@ Resources:
           
           def lambda_handler(event, context):
               print(f"Unified API event: {json.dumps(event)}")
-              
               try:
                   http_method = event.get('httpMethod', 'GET')
                   path = event.get('path', '')
                   path_params = event.get('pathParameters') or {}
                   
-                  # Extract user ID and type from Cognito authorizer context
+                  # Extract user info from Cognito context
                   user_id, user_type = extract_user_info_from_context(event)
                   if not user_id:
                       return response_with_cors(401, {'error': 'Authentication required'})
                   
                   print(f"User: {user_id}, Type: {user_type}, Path: {path}, Method: {http_method}")
                   
-                  # CUSTOMER ENDPOINTS 
+                  # CUSTOMER ENDPOINTS
                   if user_type == 'customer':
-                      # Booking operations
                       if path == '/bookings' and http_method == 'POST':
                           return create_booking(event, user_id)
                       elif path == '/bookings' and http_method == 'GET':
                           return get_customer_bookings(user_id)
-                      elif '/bookings/' in path and not path.endswith('/messages') and http_method == 'DELETE':
+                      elif '/bookings/' in path and http_method == 'DELETE':
                           booking_id = path_params.get('booking_id')
-                          return request_booking_cancellation(booking_id, user_id)
-                      
-                      # Customer profile operations
+                          return cancel_booking(booking_id, user_id)
                       elif path == '/customers/profile' and http_method == 'GET':
                           return get_customer_profile(user_id)
-                      
-                      # Feedback operations
                       elif '/bikes/' in path and path.endswith('/feedback') and http_method == 'POST':
                           bike_id = path_params.get('bike_id')
                           return submit_feedback(event, bike_id, user_id)
-                      
-                      # Message operations
                       elif path == '/messages' and http_method == 'POST':
                           return send_message(event, user_id, user_type)
                       elif '/bookings/' in path and path.endswith('/messages') and http_method == 'GET':
                           booking_id = path_params.get('booking_id')
                           return get_booking_messages(booking_id, user_id)
-                      elif '/messages/conversations' in path and http_method == 'GET':
+                      elif path == '/messages/conversations' and http_method == 'GET':
                           return get_customer_conversations(user_id)
-                      elif '/messages/conversation/' in path and http_method == 'GET':
-                          booking_id = path_params.get('booking_id')
-                          return get_conversation_history(booking_id, user_id, user_type)
                   
-                  # FRANCHISE ENDPOINTS 
+                  # FRANCHISE ENDPOINTS
                   elif user_type == 'franchise':
-                      # Bike management
                       if path == '/bikes' and http_method == 'POST':
                           return create_bike(event, user_id)
                       elif '/bikes/' in path and http_method == 'PUT':
@@ -687,60 +559,19 @@ Resources:
                       elif '/bikes/' in path and http_method == 'DELETE':
                           bike_id = path_params.get('bike_id')
                           return delete_bike(bike_id, user_id)
-                      
-                      # Booking management
                       elif path == '/franchise/bookings' and http_method == 'GET':
                           return get_franchise_bookings(user_id, event.get('queryStringParameters', {}))
-                      elif '/bookings/' in path and not path.endswith('/messages') and not path.endswith('/approve') and http_method == 'GET':
-                          booking_id = path_params.get('booking_id')
-                          return get_booking_details(booking_id, user_id)
-                      elif '/bookings/' in path and path.endswith('/approve') and http_method == 'PUT':
-                          booking_id = path_params.get('booking_id')
-                          return approve_booking(booking_id, user_id)
-                      
-                      # Cancellation management
-                      elif path == '/franchise/cancellations' and http_method == 'GET':
-                          return get_franchise_cancellation_requests(user_id)
-                      elif '/bookings/' in path and path.endswith('/cancel-approve') and http_method == 'PUT':
-                          booking_id = path_params.get('booking_id')
-                          return approve_cancellation(booking_id, user_id)
-                      elif '/bookings/' in path and path.endswith('/cancel-reject') and http_method == 'PUT':
-                          booking_id = path_params.get('booking_id')
-                          return reject_cancellation(booking_id, user_id)
-                      
-                      # Customer management
                       elif path == '/franchise/customers' and http_method == 'GET':
-                          return get_franchise_customers(user_id, event.get('queryStringParameters', {}))
-                      elif '/franchise/customers/' in path and not path.endswith('/bookings') and not path.endswith('/messages') and http_method == 'GET':
-                          customer_id = path_params.get('customer_id')
-                          return get_customer_details(customer_id, user_id)
-                      elif '/franchise/customers/' in path and path.endswith('/bookings') and http_method == 'GET':
-                          customer_id = path_params.get('customer_id')
-                          return get_customer_bookings_for_franchise(customer_id, user_id)
-                      elif '/franchise/customers/' in path and path.endswith('/messages') and http_method == 'GET':
-                          customer_id = path_params.get('customer_id')
-                          return get_customer_messages_for_franchise(customer_id, user_id)
-                      
-                      # Message operations
-                      elif path == '/messages' and http_method == 'POST':
-                          return send_message(event, user_id, user_type)
-                      elif path == '/messages' and http_method == 'GET':
-                          return get_franchise_messages(user_id)
-                      elif path == '/franchise/conversations' and http_method == 'GET':
-                          return get_franchise_conversations(user_id)
-                      elif '/franchise/conversations/' in path and http_method == 'GET':
-                          customer_id = path_params.get('customer_id')
-                          return get_franchise_customer_conversation(customer_id, user_id)
-                      elif '/messages/conversation/' in path and http_method == 'GET':
-                          booking_id = path_params.get('booking_id')
-                          return get_conversation_history(booking_id, user_id, user_type)
-                      
-                      # Dashboard
+                          return get_franchise_customers(user_id)
                       elif path == '/franchise/dashboard' and http_method == 'GET':
                           return get_franchise_dashboard(user_id)
+                      elif path == '/messages' and http_method == 'POST':
+                          return send_message(event, user_id, user_type)
+                      elif path == '/franchise/conversations' and http_method == 'GET':
+                          return get_franchise_conversations(user_id)
                   
                   return response_with_cors(404, {'error': 'Endpoint not found or access denied'})
-                      
+                  
               except Exception as e:
                   print(f"Unified API error: {str(e)}")
                   import traceback
@@ -748,21 +579,19 @@ Resources:
                   return response_with_cors(500, {'error': 'Internal server error'})
           
           # CUSTOMER FUNCTIONS
-          
           def create_booking(event, customer_id):
               try:
                   body = json.loads(event['body']) if event.get('body') else {}
-                  
                   bike_id = body.get('bike_id', '').strip()
-                  date = body.get('date', '').strip()
+                  booking_date = body.get('date', '').strip()
                   
-                  if not bike_id or not date:
+                  if not bike_id or not booking_date:
                       return response_with_cors(400, {'error': 'bike_id and date are required'})
                   
                   # Validate date format and future date
                   try:
-                      booking_date = datetime.strptime(date, '%Y-%m-%d')
-                      if booking_date.date() < datetime.now().date():
+                      booking_date_obj = datetime.strptime(booking_date, '%Y-%m-%d')
+                      if booking_date_obj.date() < date.today():
                           return response_with_cors(400, {'error': 'Cannot book for past dates'})
                   except ValueError:
                       return response_with_cors(400, {'error': 'Invalid date format. Use YYYY-MM-DD'})
@@ -782,27 +611,26 @@ Resources:
                   if not franchise_id:
                       return response_with_cors(400, {'error': 'Bike has no assigned franchise'})
                   
-                  # Check availability for the date
-                  bookings_table = dynamodb.Table(os.environ['BOOKINGS_TABLE'])
-                  existing_bookings = bookings_table.query(
-                      IndexName='BikeBookings',
-                      KeyConditionExpression=Key('bike_id').eq(bike_id) & Key('date').eq(date),
-                      FilterExpression='#status IN (:confirmed, :pending)',
-                      ExpressionAttributeNames={'#status': 'status'},
-                      ExpressionAttributeValues={
-                          ':confirmed': 'CONFIRMED',
-                          ':pending': 'PENDING'
-                      }
+                  # Check real-time availability
+                  inventory_table = dynamodb.Table(os.environ['BIKE_INVENTORY_TABLE'])
+                  inventory_response = inventory_table.get_item(
+                      Key={'bike_id': bike_id, 'date': booking_date}
                   )
                   
-                  booked_count = len(existing_bookings['Items'])
-                  if booked_count >= int(bike['count']):
+                  total_count = int(bike['count'])
+                  booked_count = 0
+                  
+                  if 'Item' in inventory_response:
+                      booked_count = int(inventory_response['Item'].get('booked_count', 0))
+                  
+                  if booked_count >= total_count:
                       return response_with_cors(400, {'error': 'Bike unavailable for this date'})
                   
-                  # Check for duplicate booking
+                  # Check for duplicate booking by same customer
+                  bookings_table = dynamodb.Table(os.environ['BOOKINGS_TABLE'])
                   customer_bookings = bookings_table.query(
                       IndexName='CustomerBookings',
-                      KeyConditionExpression=Key('customer_id').eq(customer_id) & Key('date').eq(date),
+                      KeyConditionExpression=Key('customer_id').eq(customer_id) & Key('date').eq(booking_date),
                       FilterExpression='bike_id = :bike_id AND #status IN (:confirmed, :pending)',
                       ExpressionAttributeNames={'#status': 'status'},
                       ExpressionAttributeValues={
@@ -813,48 +641,64 @@ Resources:
                   )
                   
                   if customer_bookings['Items']:
-                      return response_with_cors(400, {'error': 'Duplicate booking for same bike and date'})
+                      return response_with_cors(400, {'error': 'You already have a booking for this bike and date'})
                   
+                  # Create booking with automatic confirmation
                   booking_id = str(uuid.uuid4())
                   access_code = generate_access_code()
                   
-                  # Create booking with PENDING status
                   booking_data = {
                       'booking_id': booking_id,
                       'customer_id': customer_id,
                       'bike_id': bike_id,
                       'franchise_id': franchise_id,
-                      'date': date,
-                      'status': 'PENDING',
+                      'date': booking_date,
+                      'status': 'CONFIRMED',  # Automatically confirmed
                       'accessCode': access_code,
                       'dailyRate': bike['dailyRate'],
-                      'createdAt': datetime.now().isoformat()
+                      'createdAt': datetime.now().isoformat(),
+                      'confirmedAt': datetime.now().isoformat()
                   }
                   
-                  bookings_table.put_item(Item=booking_data)
-                  
-                  # Send to SQS for approval processing
-                  message_body = {
-                      'booking_id': booking_id,
-                      'customer_id': customer_id,
-                      'bike_id': bike_id,
-                      'franchise_id': franchise_id,
-                      'date': date,
-                      'action': 'approve_booking'
-                  }
-                  
-                  sqs.send_message(
-                      QueueUrl=os.environ['BOOKING_QUEUE_URL'],
-                      MessageBody=json.dumps(message_body)
-                  )
-                  
-                  return response_with_cors(201, {
-                      'booking_id': booking_id,
-                      'bike_id': bike_id,
-                      'date': date,
-                      'status': 'PENDING',
-                      'message': 'Booking created successfully. Awaiting approval.'
-                  })
+                  # Atomic transaction: Create booking and update inventory
+                  try:
+                      # Update inventory atomically
+                      inventory_table.update_item(
+                          Key={'bike_id': bike_id, 'date': booking_date},
+                          UpdateExpression='ADD booked_count :inc SET total_count = :total, last_updated = :now',
+                          ExpressionAttributeValues={
+                              ':inc': 1,
+                              ':total': total_count,
+                              ':now': datetime.now().isoformat()
+                          }
+                      )
+                      
+                      # Create booking
+                      bookings_table.put_item(Item=booking_data)
+                      
+                      # Send booking notification
+                      send_notification({
+                          'type': 'booking_confirmed',
+                          'booking_id': booking_id,
+                          'customer_id': customer_id,
+                          'bike_id': bike_id,
+                          'date': booking_date,
+                          'access_code': access_code
+                      })
+                      
+                      return response_with_cors(201, {
+                          'booking_id': booking_id,
+                          'bike_id': bike_id,
+                          'date': booking_date,
+                          'status': 'CONFIRMED',
+                          'accessCode': access_code,
+                          'message': 'Booking confirmed successfully!'
+                      })
+                      
+                  except Exception as e:
+                      print(f"Atomic operation failed: {str(e)}")
+                      return response_with_cors(500, {'error': 'Booking failed due to system error'})
+                      
               except Exception as e:
                   print(f"Error creating booking: {str(e)}")
                   return response_with_cors(500, {'error': 'Booking creation failed'})
@@ -862,7 +706,6 @@ Resources:
           def get_customer_bookings(customer_id):
               try:
                   bookings_table = dynamodb.Table(os.environ['BOOKINGS_TABLE'])
-                  
                   bookings_response = bookings_table.query(
                       IndexName='CustomerBookings',
                       KeyConditionExpression=Key('customer_id').eq(customer_id),
@@ -880,12 +723,12 @@ Resources:
                           'createdAt': item['createdAt']
                       }
                       
-                      # Include accessCode only for CONFIRMED bookings
+                      # Include access code for confirmed bookings
                       if item['status'] == 'CONFIRMED':
                           booking['accessCode'] = item.get('accessCode', '')
                       
                       # Add cancellation info if applicable
-                      if item['status'] in ['CANCELLATION_PENDING', 'CANCELLED']:
+                      if item['status'] == 'CANCELLED':
                           if 'cancelledAt' in item:
                               booking['cancelledAt'] = item['cancelledAt']
                           if 'cancellationReason' in item:
@@ -894,11 +737,12 @@ Resources:
                       bookings.append(booking)
                   
                   return response_with_cors(200, bookings)
+                  
               except Exception as e:
                   print(f"Error getting customer bookings: {str(e)}")
                   return response_with_cors(500, {'error': 'Database query failed'})
           
-          def request_booking_cancellation(booking_id, customer_id):
+          def cancel_booking(booking_id, customer_id):
               try:
                   if not booking_id:
                       return response_with_cors(400, {'error': 'booking_id is required'})
@@ -916,56 +760,64 @@ Resources:
                       return response_with_cors(403, {'error': 'Cannot cancel booking not owned by you'})
                   
                   # Check if booking can be cancelled
-                  if booking['status'] in ['CANCELLED', 'CANCELLATION_PENDING']:
-                      return response_with_cors(400, {'error': f'Booking already in {booking["status"]} status'})
+                  if booking['status'] in ['CANCELLED']:
+                      return response_with_cors(400, {'error': 'Booking is already cancelled'})
                   
-                  # Check if booking date has passed
                   booking_date = datetime.strptime(booking['date'], '%Y-%m-%d').date()
-                  if booking_date < datetime.now().date():
-                      return response_with_cors(403, {'error': 'Cannot cancel past bookings'})
+                  today = date.today()
+                  days_until_booking = (booking_date - today).days
                   
-                  # Create cancellation request
-                  cancellation_id = str(uuid.uuid4())
-                  cancellation_table = dynamodb.Table(os.environ['CANCELLATION_REQUESTS_TABLE'])
-                  
-                  cancellation_data = {
-                      'cancellation_id': cancellation_id,
-                      'booking_id': booking_id,
-                      'customer_id': customer_id,
-                      'franchise_id': booking['franchise_id'],
-                      'status': 'PENDING',
-                      'reason': 'Customer requested cancellation',
-                      'createdAt': datetime.now().isoformat(),
-                      'ttl': int((datetime.now() + timedelta(days=30)).timestamp())
-                  }
-                  
-                  cancellation_table.put_item(Item=cancellation_data)
-                  
-                  # Update booking status
-                  bookings_table.update_item(
-                      Key={'booking_id': booking_id},
-                      UpdateExpression='SET #status = :status, cancellationRequestedAt = :requested',
-                      ExpressionAttributeNames={'#status': 'status'},
-                      ExpressionAttributeValues={
-                          ':status': 'CANCELLATION_PENDING',
-                          ':requested': datetime.now().isoformat()
-                      }
-                  )
-                  
-                  # Send notification to franchise
-                  send_notification(
-                      topic_arn=os.environ['FRANCHISE_NOTIFICATIONS_TOPIC'],
-                      message=f"Cancellation request for booking {booking_id} from customer {customer_id}",
-                      subject="Booking Cancellation Request"
-                  )
-                  
-                  return response_with_cors(200, {
-                      'message': 'Cancellation request submitted successfully. Awaiting franchise approval.',
-                      'cancellation_id': cancellation_id
-                  })
+                  # Automatic cancellation if more than 24 hours (1 day) before
+                  if days_until_booking >= 1:
+                      # Automatically cancel
+                      bookings_table.update_item(
+                          Key={'booking_id': booking_id},
+                          UpdateExpression='SET #status = :status, cancelledAt = :cancelled, cancellationReason = :reason',
+                          ExpressionAttributeNames={'#status': 'status'},
+                          ExpressionAttributeValues={
+                              ':status': 'CANCELLED',
+                              ':cancelled': datetime.now().isoformat(),
+                              ':reason': 'Automatic cancellation - Customer request'
+                          }
+                      )
+                      
+                      # Update inventory - free up the slot
+                      inventory_table = dynamodb.Table(os.environ['BIKE_INVENTORY_TABLE'])
+                      inventory_table.update_item(
+                          Key={'bike_id': booking['bike_id'], 'date': booking['date']},
+                          UpdateExpression='ADD booked_count :dec SET last_updated = :now',
+                          ExpressionAttributeValues={
+                              ':dec': -1,
+                              ':now': datetime.now().isoformat()
+                          }
+                      )
+                      
+                      # Send cancellation notification
+                      send_notification({
+                          'type': 'booking_cancelled',
+                          'booking_id': booking_id,
+                          'customer_id': customer_id,
+                          'reason': 'automatic',
+                          'refund_eligible': True
+                      })
+                      
+                      return response_with_cors(200, {
+                          'message': 'Booking cancelled successfully. You are eligible for a full refund.',
+                          'cancelled': True,
+                          'refund_eligible': True
+                      })
+                  else:
+                      # Cannot cancel automatically - too close to booking date
+                      return response_with_cors(400, {
+                          'error': 'Cannot cancel booking less than 24 hours before the booking date',
+                          'cancelled': False,
+                          'contact_support': True,
+                          'message': 'Please contact customer support for assistance with this cancellation.'
+                      })
+                      
               except Exception as e:
-                  print(f"Error requesting cancellation: {str(e)}")
-                  return response_with_cors(500, {'error': 'Cancellation request failed'})
+                  print(f"Error cancelling booking: {str(e)}")
+                  return response_with_cors(500, {'error': 'Cancellation failed'})
           
           def get_customer_profile(customer_id):
               try:
@@ -976,7 +828,6 @@ Resources:
                       return response_with_cors(404, {'error': 'Customer not found'})
                   
                   user = user_response['Item']
-                  
                   profile = {
                       'userId': user['userId'],
                       'email': user['email'],
@@ -987,61 +838,15 @@ Resources:
                   }
                   
                   return response_with_cors(200, profile)
+                  
               except Exception as e:
                   print(f"Error getting customer profile: {str(e)}")
                   return response_with_cors(500, {'error': 'Profile retrieval failed'})
           
-          def get_customer_conversations(customer_id):
-              try:
-                  messages_table = dynamodb.Table(os.environ['MESSAGES_TABLE'])
-                  
-                  # Get all bookings for customer that have messages
-                  bookings_table = dynamodb.Table(os.environ['BOOKINGS_TABLE'])
-                  customer_bookings = bookings_table.query(
-                      IndexName='CustomerBookings',
-                      KeyConditionExpression=Key('customer_id').eq(customer_id)
-                  )
-                  
-                  conversations = []
-                  for booking in customer_bookings['Items']:
-                      booking_id = booking['booking_id']
-                      
-                      # Get latest message for this booking
-                      messages_response = messages_table.query(
-                          IndexName='BookingMessages',
-                          KeyConditionExpression=Key('booking_id').eq(booking_id),
-                          ScanIndexForward=False,
-                          Limit=1
-                      )
-                      
-                      if messages_response['Items']:
-                          latest_message = messages_response['Items'][0]
-                          conversations.append({
-                              'booking_id': booking_id,
-                              'bike_id': booking['bike_id'],
-                              'date': booking['date'],
-                              'status': booking['status'],
-                              'lastMessage': {
-                                  'content': latest_message['content'][:100] + '...' if len(latest_message['content']) > 100 else latest_message['content'],
-                                  'sender': latest_message['sender'],
-                                  'createdAt': latest_message['createdAt']
-                              }
-                          })
-                  
-                  # Sort by latest message time
-                  conversations.sort(key=lambda x: x['lastMessage']['createdAt'], reverse=True)
-                  
-                  return response_with_cors(200, conversations)
-              except Exception as e:
-                  print(f"Error getting customer conversations: {str(e)}")
-                  return response_with_cors(500, {'error': 'Database query failed'})
-          
-          # FRANCHISE FUNCTIONS 
-          
+          # FRANCHISE FUNCTIONS
           def create_bike(event, franchise_id):
               try:
                   body = json.loads(event['body']) if event.get('body') else {}
-                  
                   bike_type = body.get('type', '').strip()
                   daily_rate = body.get('dailyRate')
                   features = body.get('features', {})
@@ -1074,11 +879,21 @@ Resources:
                   
                   bikes_table.put_item(Item=bike_data)
                   
+                  # Notify about inventory update
+                  send_inventory_update({
+                      'type': 'bike_created',
+                      'bike_id': bike_id,
+                      'franchise_id': franchise_id,
+                      'bike_type': bike_type,
+                      'count': count
+                  })
+                  
                   return response_with_cors(201, {
                       'bike_id': bike_id,
                       'accessCode': access_code,
                       'message': 'Bike created successfully'
                   })
+                  
               except Exception as e:
                   print(f"Error creating bike: {str(e)}")
                   return response_with_cors(500, {'error': 'Bike creation failed'})
@@ -1089,7 +904,6 @@ Resources:
                       return response_with_cors(400, {'error': 'bike_id is required'})
                   
                   body = json.loads(event['body']) if event.get('body') else {}
-                  
                   bikes_table = dynamodb.Table(os.environ['BIKES_TABLE'])
                   
                   # Verify bike exists and belongs to franchise
@@ -1103,9 +917,10 @@ Resources:
                   
                   # Prepare update expression
                   update_expressions = []
-                  expression_values = {
-                      ':updated': datetime.now().isoformat()
-                  }
+                  expression_values = {':updated': datetime.now().isoformat()}
+                  
+                  old_count = int(bike.get('count', 0))
+                  new_count = old_count
                   
                   if 'dailyRate' in body and body['dailyRate'] > 0:
                       update_expressions.append('dailyRate = :rate')
@@ -1120,27 +935,28 @@ Resources:
                       if new_count <= 0:
                           return response_with_cors(400, {'error': 'count must be positive'})
                       
-                      # Check if reducing count below active bookings
-                      bookings_table = dynamodb.Table(os.environ['BOOKINGS_TABLE'])
-                      active_bookings = bookings_table.scan(
-                          FilterExpression='bike_id = :bike_id AND #status IN (:confirmed, :pending)',
-                          ExpressionAttributeNames={'#status': 'status'},
-                          ExpressionAttributeValues={
-                              ':bike_id': bike_id,
-                              ':confirmed': 'CONFIRMED',
-                              ':pending': 'PENDING'
-                          }
-                      )
-                      
-                      # Group by date to check max bookings per day
-                      bookings_by_date = {}
-                      for booking in active_bookings['Items']:
-                          date = booking['date']
-                          bookings_by_date[date] = bookings_by_date.get(date, 0) + 1
-                      
-                      max_bookings = max(bookings_by_date.values()) if bookings_by_date else 0
-                      if new_count < max_bookings:
-                          return response_with_cors(400, {'error': f'Cannot reduce count below {max_bookings} (active bookings)'})
+                      # Check if we can reduce count (no active bookings would be affected)
+                      if new_count < old_count:
+                          # Check active bookings for all future dates
+                          inventory_table = dynamodb.Table(os.environ['BIKE_INVENTORY_TABLE'])
+                          today_str = date.today().isoformat()
+                          
+                          # Scan inventory for future dates
+                          inventory_response = inventory_table.scan(
+                              FilterExpression='bike_id = :bike_id AND #date >= :today',
+                              ExpressionAttributeNames={'#date': 'date'},
+                              ExpressionAttributeValues={
+                                  ':bike_id': bike_id,
+                                  ':today': today_str
+                              }
+                          )
+                          
+                          for item in inventory_response['Items']:
+                              booked_count = int(item.get('booked_count', 0))
+                              if booked_count > new_count:
+                                  return response_with_cors(400, {
+                                      'error': f'Cannot reduce count to {new_count}. Date {item["date"]} has {booked_count} bookings.'
+                                  })
                       
                       update_expressions.append('#count = :count')
                       expression_values[':count'] = new_count
@@ -1149,25 +965,29 @@ Resources:
                       return response_with_cors(400, {'error': 'No valid fields to update'})
                   
                   update_expressions.append('updatedAt = :updated')
+                  expression_names = {'#count': 'count'}
                   
-                  expression_names = {}
-                  if '#count' in ' '.join(update_expressions):
-                      expression_names['#count'] = 'count'
+                  bikes_table.update_item(
+                      Key={'bike_id': bike_id},
+                      UpdateExpression='SET ' + ', '.join(update_expressions),
+                      ExpressionAttributeNames=expression_names,
+                      ExpressionAttributeValues=expression_values
+                  )
                   
-                  update_expression = 'SET ' + ', '.join(update_expressions)
-                  
-                  update_kwargs = {
-                      'Key': {'bike_id': bike_id},
-                      'UpdateExpression': update_expression,
-                      'ExpressionAttributeValues': expression_values
-                  }
-                  
-                  if expression_names:
-                      update_kwargs['ExpressionAttributeNames'] = expression_names
-                  
-                  bikes_table.update_item(**update_kwargs)
+                  # If count changed, update all future inventory records
+                  if new_count != old_count:
+                      update_future_inventory(bike_id, new_count)
+                      
+                      send_inventory_update({
+                          'type': 'bike_updated',
+                          'bike_id': bike_id,
+                          'franchise_id': franchise_id,
+                          'old_count': old_count,
+                          'new_count': new_count
+                      })
                   
                   return response_with_cors(200, {'message': 'Bike updated successfully'})
+                  
               except Exception as e:
                   print(f"Error updating bike: {str(e)}")
                   return response_with_cors(500, {'error': 'Bike update failed'})
@@ -1188,20 +1008,25 @@ Resources:
                   if bike.get('franchise_id') != franchise_id:
                       return response_with_cors(403, {'error': 'Access denied'})
                   
-                  # Check for active bookings
+                  # Check for future active bookings
                   bookings_table = dynamodb.Table(os.environ['BOOKINGS_TABLE'])
-                  active_bookings = bookings_table.scan(
-                      FilterExpression='bike_id = :bike_id AND #status IN (:confirmed, :pending)',
-                      ExpressionAttributeNames={'#status': 'status'},
+                  today_str = date.today().isoformat()
+                  
+                  future_bookings = bookings_table.scan(
+                      FilterExpression='bike_id = :bike_id AND #date >= :today AND #status = :status',
+                      ExpressionAttributeNames={'#date': 'date', '#status': 'status'},
                       ExpressionAttributeValues={
                           ':bike_id': bike_id,
-                          ':confirmed': 'CONFIRMED',
-                          ':pending': 'PENDING'
+                          ':today': today_str,
+                          ':status': 'CONFIRMED'
                       }
                   )
                   
-                  if active_bookings['Items']:
-                      return response_with_cors(400, {'error': 'Cannot delete bike with active bookings'})
+                  if future_bookings['Items']:
+                      return response_with_cors(400, {
+                          'error': 'Cannot delete bike with future active bookings',
+                          'active_bookings': len(future_bookings['Items'])
+                      })
                   
                   # Mark bike as inactive instead of deleting
                   bikes_table.update_item(
@@ -1214,7 +1039,14 @@ Resources:
                       }
                   )
                   
+                  send_inventory_update({
+                      'type': 'bike_deleted',
+                      'bike_id': bike_id,
+                      'franchise_id': franchise_id
+                  })
+                  
                   return response_with_cors(200, {'message': 'Bike deleted successfully'})
+                  
               except Exception as e:
                   print(f"Error deleting bike: {str(e)}")
                   return response_with_cors(500, {'error': 'Bike deletion failed'})
@@ -1265,11 +1097,9 @@ Resources:
                           'createdAt': item['createdAt']
                       }
                       
-                      if item['status'] in ['CANCELLED', 'CANCELLATION_PENDING']:
-                          if 'cancelledAt' in item:
-                              booking['cancelledAt'] = item['cancelledAt']
-                          if 'cancellationReason' in item:
-                              booking['cancellationReason'] = item['cancellationReason']
+                      if item['status'] == 'CANCELLED' and 'cancelledAt' in item:
+                          booking['cancelledAt'] = item['cancelledAt']
+                          booking['cancellationReason'] = item.get('cancellationReason', '')
                       
                       bookings.append(booking)
                   
@@ -1277,304 +1107,12 @@ Resources:
                       'bookings': bookings,
                       'total': len(bookings)
                   })
+                  
               except Exception as e:
                   print(f"Error getting franchise bookings: {str(e)}")
                   return response_with_cors(500, {'error': 'Database query failed'})
           
-          def get_booking_details(booking_id, franchise_id):
-              try:
-                  if not booking_id:
-                      return response_with_cors(400, {'error': 'booking_id is required'})
-                  
-                  bookings_table = dynamodb.Table(os.environ['BOOKINGS_TABLE'])
-                  booking_response = bookings_table.get_item(Key={'booking_id': booking_id})
-                  
-                  if 'Item' not in booking_response:
-                      return response_with_cors(404, {'error': 'Booking not found'})
-                  
-                  booking = booking_response['Item']
-                  
-                  # Verify franchise owns the bike
-                  if booking.get('franchise_id') != franchise_id:
-                      return response_with_cors(403, {'error': 'Access denied'})
-                  
-                  # Get customer details
-                  users_table = dynamodb.Table(os.environ['USERS_TABLE'])
-                  customer_response = users_table.get_item(Key={'userId': booking['customer_id']})
-                  customer_info = customer_response.get('Item', {})
-                  
-                  return response_with_cors(200, {
-                      'booking_id': booking['booking_id'],
-                      'customer_id': booking['customer_id'],
-                      'customer_email': customer_info.get('email', 'N/A'),
-                      'bike_id': booking['bike_id'],
-                      'date': booking['date'],
-                      'status': booking['status'],
-                      'accessCode': booking.get('accessCode', ''),
-                      'dailyRate': float(booking.get('dailyRate', 0)),
-                      'createdAt': booking['createdAt'],
-                      'approvedAt': booking.get('approvedAt'),
-                      'cancelledAt': booking.get('cancelledAt'),
-                      'cancellationReason': booking.get('cancellationReason')
-                  })
-              except Exception as e:
-                  print(f"Error getting booking details: {str(e)}")
-                  return response_with_cors(500, {'error': 'Database query failed'})
-          
-          def approve_booking(booking_id, franchise_id):
-              try:
-                  if not booking_id:
-                      return response_with_cors(400, {'error': 'booking_id is required'})
-                  
-                  bookings_table = dynamodb.Table(os.environ['BOOKINGS_TABLE'])
-                  booking_response = bookings_table.get_item(Key={'booking_id': booking_id})
-                  
-                  if 'Item' not in booking_response:
-                      return response_with_cors(404, {'error': 'Booking not found'})
-                  
-                  booking = booking_response['Item']
-                  
-                  # Verify franchise owns the bike
-                  if booking.get('franchise_id') != franchise_id:
-                      return response_with_cors(403, {'error': 'Access denied'})
-                  
-                  if booking['status'] != 'PENDING':
-                      return response_with_cors(400, {'error': f'Cannot approve booking with status: {booking["status"]}'})
-                  
-                  # Check bike availability again
-                  bikes_table = dynamodb.Table(os.environ['BIKES_TABLE'])
-                  bike_response = bikes_table.get_item(Key={'bike_id': booking['bike_id']})
-                  
-                  if 'Item' not in bike_response:
-                      return response_with_cors(400, {'error': 'Associated bike not found'})
-                  
-                  bike = bike_response['Item']
-                  existing_bookings = bookings_table.query(
-                      IndexName='BikeBookings',
-                      KeyConditionExpression=Key('bike_id').eq(booking['bike_id']) & Key('date').eq(booking['date']),
-                      FilterExpression='#status IN (:confirmed, :pending)',
-                      ExpressionAttributeNames={'#status': 'status'},
-                      ExpressionAttributeValues={
-                          ':confirmed': 'CONFIRMED',
-                          ':pending': 'PENDING'
-                      }
-                  )
-                  
-                  booked_count = len(existing_bookings['Items'])
-                  if booked_count > int(bike['count']):
-                      return response_with_cors(400, {'error': 'Bike no longer available'})
-                  
-                  # Approve booking
-                  access_code = booking.get('accessCode') or generate_access_code()
-                  
-                  bookings_table.update_item(
-                      Key={'booking_id': booking_id},
-                      UpdateExpression='SET #status = :status, accessCode = :code, approvedAt = :approved',
-                      ExpressionAttributeNames={'#status': 'status'},
-                      ExpressionAttributeValues={
-                          ':status': 'CONFIRMED',
-                          ':code': access_code,
-                          ':approved': datetime.now().isoformat()
-                      }
-                  )
-                  
-                  # Send notification to customer
-                  send_notification(
-                      topic_arn=os.environ['CUSTOMER_NOTIFICATIONS_TOPIC'],
-                      message=f"Your booking {booking_id} has been approved. Access code: {access_code}",
-                      subject="Booking Approved"
-                  )
-                  
-                  return response_with_cors(200, {
-                      'message': 'Booking approved successfully',
-                      'accessCode': access_code
-                  })
-              except Exception as e:
-                  print(f"Error approving booking: {str(e)}")
-                  return response_with_cors(500, {'error': 'Booking approval failed'})
-          
-          def get_franchise_cancellation_requests(franchise_id):
-              try:
-                  cancellation_table = dynamodb.Table(os.environ['CANCELLATION_REQUESTS_TABLE'])
-                  
-                  requests_response = cancellation_table.query(
-                      IndexName='FranchiseCancellations',
-                      KeyConditionExpression=Key('franchise_id').eq(franchise_id),
-                      FilterExpression='#status = :status',
-                      ExpressionAttributeNames={'#status': 'status'},
-                      ExpressionAttributeValues={':status': 'PENDING'},
-                      ScanIndexForward=False
-                  )
-                  
-                  requests = []
-                  for item in requests_response['Items']:
-                      # Get booking details
-                      bookings_table = dynamodb.Table(os.environ['BOOKINGS_TABLE'])
-                      booking_response = bookings_table.get_item(Key={'booking_id': item['booking_id']})
-                      
-                      if 'Item' in booking_response:
-                          booking = booking_response['Item']
-                          
-                          # Get customer details
-                          users_table = dynamodb.Table(os.environ['USERS_TABLE'])
-                          customer_response = users_table.get_item(Key={'userId': item['customer_id']})
-                          customer_info = customer_response.get('Item', {})
-                          
-                          requests.append({
-                              'cancellation_id': item['cancellation_id'],
-                              'booking_id': item['booking_id'],
-                              'customer_id': item['customer_id'],
-                              'customer_email': customer_info.get('email', 'N/A'),
-                              'bike_id': booking['bike_id'],
-                              'date': booking['date'],
-                              'reason': item['reason'],
-                              'createdAt': item['createdAt'],
-                              'dailyRate': float(booking.get('dailyRate', 0))
-                          })
-                  
-                  return response_with_cors(200, {
-                      'cancellationRequests': requests,
-                      'total': len(requests)
-                  })
-              except Exception as e:
-                  print(f"Error getting cancellation requests: {str(e)}")
-                  return response_with_cors(500, {'error': 'Database query failed'})
-          
-          def approve_cancellation(booking_id, franchise_id):
-              try:
-                  if not booking_id:
-                      return response_with_cors(400, {'error': 'booking_id is required'})
-                  
-                  # Verify booking and cancellation request
-                  bookings_table = dynamodb.Table(os.environ['BOOKINGS_TABLE'])
-                  booking_response = bookings_table.get_item(Key={'booking_id': booking_id})
-                  
-                  if 'Item' not in booking_response:
-                      return response_with_cors(404, {'error': 'Booking not found'})
-                  
-                  booking = booking_response['Item']
-                  
-                  if booking.get('franchise_id') != franchise_id:
-                      return response_with_cors(403, {'error': 'Access denied'})
-                  
-                  if booking['status'] != 'CANCELLATION_PENDING':
-                      return response_with_cors(400, {'error': 'No pending cancellation request for this booking'})
-                  
-                  # Update booking status
-                  bookings_table.update_item(
-                      Key={'booking_id': booking_id},
-                      UpdateExpression='SET #status = :status, cancelledAt = :cancelled, cancellationReason = :reason',
-                      ExpressionAttributeNames={'#status': 'status'},
-                      ExpressionAttributeValues={
-                          ':status': 'CANCELLED',
-                          ':cancelled': datetime.now().isoformat(),
-                          ':reason': 'Approved by franchise'
-                      }
-                  )
-                  
-                  # Update cancellation request
-                  cancellation_table = dynamodb.Table(os.environ['CANCELLATION_REQUESTS_TABLE'])
-                  cancellation_response = cancellation_table.scan(
-                      FilterExpression='booking_id = :booking_id AND #status = :status',
-                      ExpressionAttributeNames={'#status': 'status'},
-                      ExpressionAttributeValues={
-                          ':booking_id': booking_id,
-                          ':status': 'PENDING'
-                      }
-                  )
-                  
-                  if cancellation_response['Items']:
-                      cancellation = cancellation_response['Items'][0]
-                      cancellation_table.update_item(
-                          Key={'cancellation_id': cancellation['cancellation_id']},
-                          UpdateExpression='SET #status = :status, processedAt = :processed, processedBy = :processed_by',
-                          ExpressionAttributeNames={'#status': 'status'},
-                          ExpressionAttributeValues={
-                              ':status': 'APPROVED',
-                              ':processed': datetime.now().isoformat(),
-                              ':processed_by': franchise_id
-                          }
-                      )
-                  
-                  # Send notification to customer
-                  send_notification(
-                      topic_arn=os.environ['CUSTOMER_NOTIFICATIONS_TOPIC'],
-                      message=f"Your cancellation request for booking {booking_id} has been approved.",
-                      subject="Cancellation Approved"
-                  )
-                  
-                  return response_with_cors(200, {'message': 'Cancellation approved successfully'})
-              except Exception as e:
-                  print(f"Error approving cancellation: {str(e)}")
-                  return response_with_cors(500, {'error': 'Cancellation approval failed'})
-          
-          def reject_cancellation(booking_id, franchise_id):
-              try:
-                  if not booking_id:
-                      return response_with_cors(400, {'error': 'booking_id is required'})
-                  
-                  # Verify booking and cancellation request
-                  bookings_table = dynamodb.Table(os.environ['BOOKINGS_TABLE'])
-                  booking_response = bookings_table.get_item(Key={'booking_id': booking_id})
-                  
-                  if 'Item' not in booking_response:
-                      return response_with_cors(404, {'error': 'Booking not found'})
-                  
-                  booking = booking_response['Item']
-                  
-                  if booking.get('franchise_id') != franchise_id:
-                      return response_with_cors(403, {'error': 'Access denied'})
-                  
-                  if booking['status'] != 'CANCELLATION_PENDING':
-                      return response_with_cors(400, {'error': 'No pending cancellation request for this booking'})
-                  
-                  # Restore booking to original status
-                  original_status = 'CONFIRMED' if booking.get('accessCode') else 'PENDING'
-                  
-                  bookings_table.update_item(
-                      Key={'booking_id': booking_id},
-                      UpdateExpression='SET #status = :status',
-                      ExpressionAttributeNames={'#status': 'status'},
-                      ExpressionAttributeValues={':status': original_status}
-                  )
-                  
-                  # Update cancellation request
-                  cancellation_table = dynamodb.Table(os.environ['CANCELLATION_REQUESTS_TABLE'])
-                  cancellation_response = cancellation_table.scan(
-                      FilterExpression='booking_id = :booking_id AND #status = :status',
-                      ExpressionAttributeNames={'#status': 'status'},
-                      ExpressionAttributeValues={
-                          ':booking_id': booking_id,
-                          ':status': 'PENDING'
-                      }
-                  )
-                  
-                  if cancellation_response['Items']:
-                      cancellation = cancellation_response['Items'][0]
-                      cancellation_table.update_item(
-                          Key={'cancellation_id': cancellation['cancellation_id']},
-                          UpdateExpression='SET #status = :status, processedAt = :processed, processedBy = :processed_by',
-                          ExpressionAttributeNames={'#status': 'status'},
-                          ExpressionAttributeValues={
-                              ':status': 'REJECTED',
-                              ':processed': datetime.now().isoformat(),
-                              ':processed_by': franchise_id
-                          }
-                      )
-                  
-                  # Send notification to customer
-                  send_notification(
-                      topic_arn=os.environ['CUSTOMER_NOTIFICATIONS_TOPIC'],
-                      message=f"Your cancellation request for booking {booking_id} has been rejected. The booking remains active.",
-                      subject="Cancellation Rejected"
-                  )
-                  
-                  return response_with_cors(200, {'message': 'Cancellation rejected successfully'})
-              except Exception as e:
-                  print(f"Error rejecting cancellation: {str(e)}")
-                  return response_with_cors(500, {'error': 'Cancellation rejection failed'})
-          
-          def get_franchise_customers(franchise_id, query_params):
+          def get_franchise_customers(franchise_id):
               try:
                   # Get unique customers who have bookings for this franchise
                   bookings_table = dynamodb.Table(os.environ['BOOKINGS_TABLE'])
@@ -1592,13 +1130,15 @@ Resources:
                               'totalBookings': 0,
                               'firstBooking': booking['date'],
                               'lastBooking': booking['date'],
+                              'totalRevenue': 0,
                               'statuses': {}
                           }
                       
                       customer_data = unique_customers[customer_id]
                       customer_data['totalBookings'] += 1
+                      customer_data['totalRevenue'] += float(booking.get('dailyRate', 0))
                       
-                      # Track earliest and latest booking dates
+                      # Track date range
                       if booking['date'] < customer_data['firstBooking']:
                           customer_data['firstBooking'] = booking['date']
                       if booking['date'] > customer_data['lastBooking']:
@@ -1608,7 +1148,7 @@ Resources:
                       status = booking['status']
                       customer_data['statuses'][status] = customer_data['statuses'].get(status, 0) + 1
                   
-                  # Get customer details from users table
+                  # Get customer details
                   users_table = dynamodb.Table(os.environ['USERS_TABLE'])
                   customers = []
                   
@@ -1621,245 +1161,22 @@ Resources:
                           'email': user_info.get('email', 'N/A'),
                           'registrationDate': user_info.get('registrationDate'),
                           'totalBookings': customer_data['totalBookings'],
+                          'totalRevenue': customer_data['totalRevenue'],
                           'firstBooking': customer_data['firstBooking'],
                           'lastBooking': customer_data['lastBooking'],
                           'bookingStatuses': customer_data['statuses']
                       })
                   
-                  # Sort by total bookings descending
-                  customers.sort(key=lambda x: x['totalBookings'], reverse=True)
+                  # Sort by total revenue descending
+                  customers.sort(key=lambda x: x['totalRevenue'], reverse=True)
                   
                   return response_with_cors(200, {
                       'customers': customers,
                       'total': len(customers)
                   })
+                  
               except Exception as e:
                   print(f"Error getting franchise customers: {str(e)}")
-                  return response_with_cors(500, {'error': 'Database query failed'})
-          
-          def get_customer_details(customer_id, franchise_id):
-              try:
-                  # Get customer info
-                  users_table = dynamodb.Table(os.environ['USERS_TABLE'])
-                  customer_response = users_table.get_item(Key={'userId': customer_id})
-                  
-                  if 'Item' not in customer_response:
-                      return response_with_cors(404, {'error': 'Customer not found'})
-                  
-                  customer = customer_response['Item']
-                  
-                  # Get customer's bookings for this franchise
-                  bookings_table = dynamodb.Table(os.environ['BOOKINGS_TABLE'])
-                  bookings_response = bookings_table.scan(
-                      FilterExpression='customer_id = :customer_id AND franchise_id = :franchise_id',
-                      ExpressionAttributeValues={
-                          ':customer_id': customer_id,
-                          ':franchise_id': franchise_id
-                      }
-                  )
-                  
-                  if not bookings_response['Items']:
-                      return response_with_cors(403, {'error': 'Customer has no bookings with your franchise'})
-                  
-                  # Calculate statistics
-                  total_bookings = len(bookings_response['Items'])
-                  total_revenue = sum(float(booking.get('dailyRate', 0)) for booking in bookings_response['Items'])
-                  status_counts = {}
-                  
-                  for booking in bookings_response['Items']:
-                      status = booking['status']
-                      status_counts[status] = status_counts.get(status, 0) + 1
-                  
-                  return response_with_cors(200, {
-                      'customer_id': customer_id,
-                      'email': customer['email'],
-                      'userType': customer['userType'],
-                      'registrationDate': customer.get('registrationDate'),
-                      'isActive': customer.get('isActive', False),
-                      'bookingStatistics': {
-                          'totalBookings': total_bookings,
-                          'totalRevenue': total_revenue,
-                          'statusBreakdown': status_counts
-                      }
-                  })
-              except Exception as e:
-                  print(f"Error getting customer details: {str(e)}")
-                  return response_with_cors(500, {'error': 'Database query failed'})
-          
-          def get_customer_bookings_for_franchise(customer_id, franchise_id):
-              try:
-                  bookings_table = dynamodb.Table(os.environ['BOOKINGS_TABLE'])
-                  
-                  bookings_response = bookings_table.scan(
-                      FilterExpression='customer_id = :customer_id AND franchise_id = :franchise_id',
-                      ExpressionAttributeValues={
-                          ':customer_id': customer_id,
-                          ':franchise_id': franchise_id
-                      }
-                  )
-                  
-                  bookings = []
-                  for item in bookings_response['Items']:
-                      booking = {
-                          'booking_id': item['booking_id'],
-                          'bike_id': item['bike_id'],
-                          'date': item['date'],
-                          'status': item['status'],
-                          'dailyRate': float(item.get('dailyRate', 0)),
-                          'accessCode': item.get('accessCode', ''),
-                          'createdAt': item['createdAt']
-                      }
-                      
-                      if item.get('approvedAt'):
-                          booking['approvedAt'] = item['approvedAt']
-                      if item.get('cancelledAt'):
-                          booking['cancelledAt'] = item['cancelledAt']
-                      if item.get('cancellationReason'):
-                          booking['cancellationReason'] = item['cancellationReason']
-                      
-                      bookings.append(booking)
-                  
-                  # Sort by date descending
-                  bookings.sort(key=lambda x: x['date'], reverse=True)
-                  
-                  return response_with_cors(200, bookings)
-              except Exception as e:
-                  print(f"Error getting customer bookings for franchise: {str(e)}")
-                  return response_with_cors(500, {'error': 'Database query failed'})
-          
-          def get_customer_messages_for_franchise(customer_id, franchise_id):
-              try:
-                  messages_table = dynamodb.Table(os.environ['MESSAGES_TABLE'])
-                  
-                  # Get messages between this customer and franchise
-                  messages_response = messages_table.scan(
-                      FilterExpression='customer_id = :customer_id AND franchise_id = :franchise_id',
-                      ExpressionAttributeValues={
-                          ':customer_id': customer_id,
-                          ':franchise_id': franchise_id
-                      }
-                  )
-                  
-                  messages = []
-                  for item in messages_response['Items']:
-                      messages.append({
-                          'message_id': item['message_id'],
-                          'booking_id': item['booking_id'],
-                          'content': item['content'],
-                          'sender': item['sender'],
-                          'createdAt': item['createdAt']
-                      })
-                  
-                  # Sort by creation time
-                  messages.sort(key=lambda x: x['createdAt'])
-                  
-                  return response_with_cors(200, messages)
-              except Exception as e:
-                  print(f"Error getting customer messages for franchise: {str(e)}")
-                  return response_with_cors(500, {'error': 'Database query failed'})
-          
-          def get_franchise_conversations(franchise_id):
-              try:
-                  # Get all unique customers who have messaged this franchise
-                  messages_table = dynamodb.Table(os.environ['MESSAGES_TABLE'])
-                  
-                  messages_response = messages_table.query(
-                      IndexName='FranchiseMessages',
-                      KeyConditionExpression=Key('franchise_id').eq(franchise_id)
-                  )
-                  
-                  conversations = {}
-                  for message in messages_response['Items']:
-                      customer_id = message['customer_id']
-                      
-                      if customer_id not in conversations:
-                          conversations[customer_id] = {
-                              'customer_id': customer_id,
-                              'messageCount': 0,
-                              'lastMessage': None,
-                              'bookings': set()
-                          }
-                      
-                      conv = conversations[customer_id]
-                      conv['messageCount'] += 1
-                      conv['bookings'].add(message['booking_id'])
-                      
-                      # Track latest message
-                      if not conv['lastMessage'] or message['createdAt'] > conv['lastMessage']['createdAt']:
-                          conv['lastMessage'] = {
-                              'content': message['content'][:100] + '...' if len(message['content']) > 100 else message['content'],
-                              'sender': message['sender'],
-                              'createdAt': message['createdAt'],
-                              'booking_id': message['booking_id']
-                          }
-                  
-                  # Convert to list and get customer details
-                  users_table = dynamodb.Table(os.environ['USERS_TABLE'])
-                  result = []
-                  
-                  for customer_id, conv_data in conversations.items():
-                      user_response = users_table.get_item(Key={'userId': customer_id})
-                      user_info = user_response.get('Item', {})
-                      
-                      result.append({
-                          'customer_id': customer_id,
-                          'customer_email': user_info.get('email', 'N/A'),
-                          'messageCount': conv_data['messageCount'],
-                          'totalBookings': len(conv_data['bookings']),
-                          'lastMessage': conv_data['lastMessage']
-                      })
-                  
-                  # Sort by last message time
-                  result.sort(key=lambda x: x['lastMessage']['createdAt'] if x['lastMessage'] else '', reverse=True)
-                  
-                  return response_with_cors(200, result)
-              except Exception as e:
-                  print(f"Error getting franchise conversations: {str(e)}")
-                  return response_with_cors(500, {'error': 'Database query failed'})
-          
-          def get_franchise_customer_conversation(customer_id, franchise_id):
-              try:
-                  messages_table = dynamodb.Table(os.environ['MESSAGES_TABLE'])
-                  
-                  # Get all messages between this customer and franchise
-                  messages_response = messages_table.scan(
-                      FilterExpression='customer_id = :customer_id AND franchise_id = :franchise_id',
-                      ExpressionAttributeValues={
-                          ':customer_id': customer_id,
-                          ':franchise_id': franchise_id
-                      }
-                  )
-                  
-                  messages = []
-                  bookings_involved = set()
-                  
-                  for item in messages_response['Items']:
-                      messages.append({
-                          'message_id': item['message_id'],
-                          'booking_id': item['booking_id'],
-                          'content': item['content'],
-                          'sender': item['sender'],
-                          'createdAt': item['createdAt']
-                      })
-                      bookings_involved.add(item['booking_id'])
-                  
-                  # Sort messages by creation time
-                  messages.sort(key=lambda x: x['createdAt'])
-                  
-                  # Get customer info
-                  users_table = dynamodb.Table(os.environ['USERS_TABLE'])
-                  customer_response = users_table.get_item(Key={'userId': customer_id})
-                  customer_info = customer_response.get('Item', {})
-                  
-                  return response_with_cors(200, {
-                      'customer_id': customer_id,
-                      'customer_email': customer_info.get('email', 'N/A'),
-                      'totalMessages': len(messages),
-                      'bookingsInvolved': list(bookings_involved),
-                      'messages': messages
-                  })
-              except Exception as e:
-                  print(f"Error getting franchise customer conversation: {str(e)}")
                   return response_with_cors(500, {'error': 'Database query failed'})
           
           def get_franchise_dashboard(franchise_id):
@@ -1882,7 +1199,7 @@ Resources:
                   
                   # Calculate statistics
                   total_bookings = len(bookings_response['Items'])
-                  total_revenue = sum(float(booking.get('dailyRate', 0)) for booking in bookings_response['Items'])
+                  total_revenue = sum(float(booking.get('dailyRate', 0)) for booking in bookings_response['Items'] if booking['status'] == 'CONFIRMED')
                   
                   status_counts = {}
                   monthly_revenue = {}
@@ -1910,16 +1227,6 @@ Resources:
                   # Get unique customers
                   unique_customers = len(set(booking['customer_id'] for booking in bookings_response['Items']))
                   
-                  # Pending cancellations
-                  cancellation_table = dynamodb.Table(os.environ['CANCELLATION_REQUESTS_TABLE'])
-                  pending_cancellations = cancellation_table.query(
-                      IndexName='FranchiseCancellations',
-                      KeyConditionExpression=Key('franchise_id').eq(franchise_id),
-                      FilterExpression='#status = :status',
-                      ExpressionAttributeNames={'#status': 'status'},
-                      ExpressionAttributeValues={':status': 'PENDING'}
-                  )
-                  
                   return response_with_cors(200, {
                       'franchise_id': franchise_id,
                       'bookingStatistics': {
@@ -1933,12 +1240,9 @@ Resources:
                           'activeBikes': active_bikes,
                           'totalBikeCount': total_bike_count,
                           'bikeTypeBreakdown': bike_types
-                      },
-                      'pendingActions': {
-                          'pendingBookings': status_counts.get('PENDING', 0),
-                          'pendingCancellations': len(pending_cancellations.get('Items', []))
                       }
                   })
+                  
               except Exception as e:
                   print(f"Error getting franchise dashboard: {str(e)}")
                   return response_with_cors(500, {'error': 'Database query failed'})
@@ -1946,7 +1250,6 @@ Resources:
           def submit_feedback(event, bike_id, customer_id):
               try:
                   body = json.loads(event['body']) if event.get('body') else {}
-                  
                   booking_id = body.get('booking_id', '').strip()
                   rating = body.get('rating')
                   comment = body.get('comment', '').strip()
@@ -1965,13 +1268,14 @@ Resources:
                       return response_with_cors(400, {'error': 'Booking not found'})
                   
                   booking = booking_response['Item']
+                  
                   if booking['customer_id'] != customer_id:
                       return response_with_cors(403, {'error': 'Cannot provide feedback for booking not owned by you'})
                   
                   if booking['bike_id'] != bike_id:
                       return response_with_cors(400, {'error': 'Booking is not for this bike'})
                   
-                  if booking['status'] not in ['CONFIRMED', 'COMPLETED']:
+                  if booking['status'] != 'CONFIRMED':
                       return response_with_cors(400, {'error': 'Can only provide feedback for confirmed bookings'})
                   
                   # Check if feedback already exists
@@ -2009,6 +1313,7 @@ Resources:
                       'sentiment': sentiment,
                       'message': 'Feedback submitted successfully'
                   })
+                  
               except Exception as e:
                   print(f"Error submitting feedback: {str(e)}")
                   return response_with_cors(500, {'error': 'Feedback submission failed'})
@@ -2016,7 +1321,6 @@ Resources:
           def send_message(event, user_id, user_type):
               try:
                   body = json.loads(event['body']) if event.get('body') else {}
-                  
                   booking_id = body.get('booking_id', '').strip()
                   content = body.get('content', '').strip()
                   
@@ -2032,25 +1336,15 @@ Resources:
                   
                   booking = booking_response['Item']
                   
-                  # Generate conversation ID for consistent grouping
-                  conversation_id = f"{booking['customer_id']}_{booking['franchise_id']}"
-                  
                   # Verify access based on user type
                   if user_type == 'customer':
                       if booking['customer_id'] != user_id:
                           return response_with_cors(403, {'error': 'Cannot send message for booking not owned by you'})
                       sender = 'CUSTOMER'
-                      notification_topic = os.environ['FRANCHISE_NOTIFICATIONS_TOPIC']
-                      notification_message = f"New customer message for booking {booking_id}: {content}"
-                      
                   elif user_type == 'franchise':
-                      # Verify franchise owns the bike
                       if booking.get('franchise_id') != user_id:
                           return response_with_cors(403, {'error': 'Access denied'})
                       sender = 'FRANCHISE'
-                      notification_topic = os.environ['CUSTOMER_NOTIFICATIONS_TOPIC']
-                      notification_message = f"New message for booking {booking_id}: {content}"
-                      
                   else:
                       return response_with_cors(403, {'error': 'Invalid user type'})
                   
@@ -2060,7 +1354,6 @@ Resources:
                   message_data = {
                       'message_id': message_id,
                       'booking_id': booking_id,
-                      'conversation_id': conversation_id,
                       'customer_id': booking['customer_id'],
                       'franchise_id': booking['franchise_id'],
                       'content': content,
@@ -2071,17 +1364,11 @@ Resources:
                   
                   messages_table.put_item(Item=message_data)
                   
-                  # Send notification
-                  send_notification(
-                      topic_arn=notification_topic,
-                      message=notification_message,
-                      subject="New Message"
-                  )
-                  
                   return response_with_cors(201, {
                       'message_id': message_id,
                       'message': 'Message sent successfully'
                   })
+                  
               except Exception as e:
                   print(f"Error sending message: {str(e)}")
                   return response_with_cors(500, {'error': 'Message sending failed'})
@@ -2123,99 +1410,116 @@ Resources:
                       'messages': messages,
                       'totalMessages': len(messages)
                   })
+                  
               except Exception as e:
                   print(f"Error getting booking messages: {str(e)}")
                   return response_with_cors(500, {'error': 'Database query failed'})
           
-          def get_conversation_history(booking_id, user_id, user_type):
+          def get_customer_conversations(customer_id):
               try:
-                  if not booking_id:
-                      return response_with_cors(400, {'error': 'booking_id is required'})
-                  
-                  # Verify booking access
-                  bookings_table = dynamodb.Table(os.environ['BOOKINGS_TABLE'])
-                  booking_response = bookings_table.get_item(Key={'booking_id': booking_id})
-                  
-                  if 'Item' not in booking_response:
-                      return response_with_cors(404, {'error': 'Booking not found'})
-                  
-                  booking = booking_response['Item']
-                  
-                  if user_type == 'customer' and booking['customer_id'] != user_id:
-                      return response_with_cors(403, {'error': 'Access denied'})
-                  elif user_type == 'franchise' and booking.get('franchise_id') != user_id:
-                      return response_with_cors(403, {'error': 'Access denied'})
-                  
                   messages_table = dynamodb.Table(os.environ['MESSAGES_TABLE'])
-                  messages_response = messages_table.query(
-                      IndexName='BookingMessages',
-                      KeyConditionExpression=Key('booking_id').eq(booking_id),
-                      ScanIndexForward=True
+                  
+                  # Get all bookings for customer that have messages
+                  bookings_table = dynamodb.Table(os.environ['BOOKINGS_TABLE'])
+                  customer_bookings = bookings_table.query(
+                      IndexName='CustomerBookings',
+                      KeyConditionExpression=Key('customer_id').eq(customer_id)
                   )
                   
-                  messages = []
-                  for item in messages_response['Items']:
-                      messages.append({
-                          'message_id': item['message_id'],
-                          'content': item['content'],
-                          'sender': item['sender'],
-                          'createdAt': item['createdAt']
-                      })
+                  conversations = []
+                  for booking in customer_bookings['Items']:
+                      booking_id = booking['booking_id']
+                      
+                      # Get latest message for this booking
+                      messages_response = messages_table.query(
+                          IndexName='BookingMessages',
+                          KeyConditionExpression=Key('booking_id').eq(booking_id),
+                          ScanIndexForward=False,
+                          Limit=1
+                      )
+                      
+                      if messages_response['Items']:
+                          latest_message = messages_response['Items'][0]
+                          conversations.append({
+                              'booking_id': booking_id,
+                              'bike_id': booking['bike_id'],
+                              'date': booking['date'],
+                              'status': booking['status'],
+                              'lastMessage': {
+                                  'content': latest_message['content'][:100] + '...' if len(latest_message['content']) > 100 else latest_message['content'],
+                                  'sender': latest_message['sender'],
+                                  'createdAt': latest_message['createdAt']
+                              }
+                          })
                   
-                  # Get customer and bike info 
-                  users_table = dynamodb.Table(os.environ['USERS_TABLE'])
-                  customer_response = users_table.get_item(Key={'userId': booking['customer_id']})
-                  customer_info = customer_response.get('Item', {})
+                  # Sort by latest message time
+                  conversations.sort(key=lambda x: x['lastMessage']['createdAt'], reverse=True)
                   
-                  bikes_table = dynamodb.Table(os.environ['BIKES_TABLE'])
-                  bike_response = bikes_table.get_item(Key={'bike_id': booking['bike_id']})
-                  bike_info = bike_response.get('Item', {})
+                  return response_with_cors(200, conversations)
                   
-                  return response_with_cors(200, {
-                      'booking_id': booking_id,
-                      'booking_info': {
-                          'date': booking['date'],
-                          'status': booking['status'],
-                          'bike_type': bike_info.get('type', 'Unknown'),
-                          'customer_email': customer_info.get('email', 'N/A')
-                      },
-                      'messages': messages,
-                      'totalMessages': len(messages)
-                  })
               except Exception as e:
-                  print(f"Error getting conversation history: {str(e)}")
+                  print(f"Error getting customer conversations: {str(e)}")
                   return response_with_cors(500, {'error': 'Database query failed'})
           
-          def get_franchise_messages(franchise_id):
+          def get_franchise_conversations(franchise_id):
               try:
+                  # Get all unique customers who have messaged this franchise
                   messages_table = dynamodb.Table(os.environ['MESSAGES_TABLE'])
-                  
-                  # Get all messages for franchise user
                   messages_response = messages_table.query(
                       IndexName='FranchiseMessages',
-                      KeyConditionExpression=Key('franchise_id').eq(franchise_id),
-                      ScanIndexForward=False
+                      KeyConditionExpression=Key('franchise_id').eq(franchise_id)
                   )
                   
-                  messages = []
-                  for item in messages_response['Items']:
-                      messages.append({
-                          'message_id': item['message_id'],
-                          'booking_id': item['booking_id'],
-                          'customer_id': item['customer_id'],
-                          'content': item['content'][:100] + '...' if len(item['content']) > 100 else item['content'],
-                          'sender': item['sender'],
-                          'createdAt': item['createdAt']
+                  conversations = {}
+                  for message in messages_response['Items']:
+                      customer_id = message['customer_id']
+                      if customer_id not in conversations:
+                          conversations[customer_id] = {
+                              'customer_id': customer_id,
+                              'messageCount': 0,
+                              'lastMessage': None,
+                              'bookings': set()
+                          }
+                      
+                      conv = conversations[customer_id]
+                      conv['messageCount'] += 1
+                      conv['bookings'].add(message['booking_id'])
+                      
+                      # Track latest message
+                      if not conv['lastMessage'] or message['createdAt'] > conv['lastMessage']['createdAt']:
+                          conv['lastMessage'] = {
+                              'content': message['content'][:100] + '...' if len(message['content']) > 100 else message['content'],
+                              'sender': message['sender'],
+                              'createdAt': message['createdAt'],
+                              'booking_id': message['booking_id']
+                          }
+                  
+                  # Convert to list and get customer details
+                  users_table = dynamodb.Table(os.environ['USERS_TABLE'])
+                  result = []
+                  
+                  for customer_id, conv_data in conversations.items():
+                      user_response = users_table.get_item(Key={'userId': customer_id})
+                      user_info = user_response.get('Item', {})
+                      
+                      result.append({
+                          'customer_id': customer_id,
+                          'customer_email': user_info.get('email', 'N/A'),
+                          'messageCount': conv_data['messageCount'],
+                          'totalBookings': len(conv_data['bookings']),
+                          'lastMessage': conv_data['lastMessage']
                       })
                   
-                  return response_with_cors(200, {
-                      'messages': messages,
-                      'total': len(messages)
-                  })
+                  # Sort by last message time
+                  result.sort(key=lambda x: x['lastMessage']['createdAt'] if x['lastMessage'] else '', reverse=True)
+                  
+                  return response_with_cors(200, result)
+                  
               except Exception as e:
-                  print(f"Error getting franchise messages: {str(e)}")
+                  print(f"Error getting franchise conversations: {str(e)}")
                   return response_with_cors(500, {'error': 'Database query failed'})
           
+          # UTILITY FUNCTIONS
           def analyze_sentiment(comment, rating):
               try:
                   if comment and len(comment.strip()) > 0:
@@ -2232,6 +1536,7 @@ Resources:
                           sentiment = 'negative'
                   
                   return sentiment
+                  
               except Exception as e:
                   print(f"Error analyzing sentiment: {str(e)}")
                   # Fallback to rating-based sentiment
@@ -2245,15 +1550,55 @@ Resources:
           def generate_access_code():
               return ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
           
-          def send_notification(topic_arn, message, subject):
+          def send_notification(notification_data):
               try:
                   sns.publish(
-                      TopicArn=topic_arn,
-                      Message=message,
-                      Subject=subject
+                      TopicArn=os.environ['BOOKING_NOTIFICATIONS_TOPIC'],
+                      Message=json.dumps(notification_data),
+                      Subject=f"Booking Notification - {notification_data.get('type', 'update')}"
                   )
+                  print(f"Notification sent: {notification_data}")
               except Exception as e:
                   print(f"Error sending notification: {str(e)}")
+          
+          def send_inventory_update(update_data):
+              try:
+                  sns.publish(
+                      TopicArn=os.environ['INVENTORY_UPDATES_TOPIC'],
+                      Message=json.dumps(update_data),
+                      Subject=f"Inventory Update - {update_data.get('type', 'update')}"
+                  )
+                  print(f"Inventory update sent: {update_data}")
+              except Exception as e:
+                  print(f"Error sending inventory update: {str(e)}")
+          
+          def update_future_inventory(bike_id, new_count):
+              try:
+                  inventory_table = dynamodb.Table(os.environ['BIKE_INVENTORY_TABLE'])
+                  today_str = date.today().isoformat()
+                  
+                  # Update all future inventory records
+                  inventory_response = inventory_table.scan(
+                      FilterExpression='bike_id = :bike_id AND #date >= :today',
+                      ExpressionAttributeNames={'#date': 'date'},
+                      ExpressionAttributeValues={
+                          ':bike_id': bike_id,
+                          ':today': today_str
+                      }
+                  )
+                  
+                  for item in inventory_response['Items']:
+                      inventory_table.update_item(
+                          Key={'bike_id': bike_id, 'date': item['date']},
+                          UpdateExpression='SET total_count = :total, last_updated = :now',
+                          ExpressionAttributeValues={
+                              ':total': new_count,
+                              ':now': datetime.now().isoformat()
+                          }
+                      )
+                  
+              except Exception as e:
+                  print(f"Error updating future inventory: {str(e)}")
           
           def extract_user_info_from_context(event):
               try:
@@ -2262,7 +1607,6 @@ Resources:
                   claims = authorizer.get('claims', {})
                   
                   email = claims.get('email')
-                  
                   if email:
                       users_table = dynamodb.Table(os.environ['USERS_TABLE'])
                       response = users_table.scan(
@@ -2276,6 +1620,7 @@ Resources:
                               return user_data['userId'], user_data['userType']
                   
                   return None, None
+                  
               except Exception as e:
                   print(f"Error extracting user info: {str(e)}")
                   return None, None
@@ -2292,11 +1637,11 @@ Resources:
                   'body': json.dumps(body, default=str)
               }
 
-  # BOOKING PROCESSOR using SQS Trigger
-  BookingProcessorFunction:
+  # REAL-TIME INVENTORY SYNC FUNCTION
+  InventorySyncFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${ProjectName}-BookingProcessor-${Environment}'
+      FunctionName: !Sub '${ProjectName}-InventorySync-${Environment}'
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !Sub 'arn:aws:iam::${AWS::AccountId}:role/LabRole'
@@ -2304,153 +1649,98 @@ Resources:
       MemorySize: 256
       Environment:
         Variables:
-          BOOKINGS_TABLE: !Ref BookingsTable
-          BIKES_TABLE: !Ref BikesTable
-          CUSTOMER_NOTIFICATIONS_TOPIC: !Ref CustomerNotificationsTopic
+          BIKE_INVENTORY_TABLE: !Ref BikeInventoryTable
+          INVENTORY_UPDATES_TOPIC: !Ref InventoryUpdatesTopic
       Code:
         ZipFile: |
           import json
           import boto3
           import os
-          from datetime import datetime
-          from boto3.dynamodb.conditions import Key
+          from datetime import datetime, date
           
-          dynamodb = boto3.resource('dynamodb')
+          dynamodb = dynamodb.resource('dynamodb')
           sns = boto3.client('sns')
           
           def lambda_handler(event, context):
-              print(f"Booking processor event: {json.dumps(event)}")
+              print(f"Inventory sync event: {json.dumps(event)}")
               
-              for record in event['Records']:
-                  try:
-                      message_body = json.loads(record['body'])
-                      
-                      if message_body.get('action') == 'approve_booking':
-                          process_booking_approval(message_body)
-                      
-                  except Exception as e:
-                      print(f"Error processing booking: {str(e)}")
-                      continue
-              
-              return {'statusCode': 200, 'body': 'Bookings processed'}
-          
-          def process_booking_approval(message):
               try:
-                  booking_id = message['booking_id']
-                  customer_id = message['customer_id']
-                  bike_id = message['bike_id']
-                  franchise_id = message['franchise_id']
-                  date = message['date']
+                  # Process DynamoDB stream records from Bikes table
+                  for record in event['Records']:
+                      if record['eventName'] in ['INSERT', 'MODIFY', 'REMOVE']:
+                          process_bike_change(record)
                   
-                  bookings_table = dynamodb.Table(os.environ['BOOKINGS_TABLE'])
-                  bikes_table = dynamodb.Table(os.environ['BIKES_TABLE'])
-                  
-                  # Get current booking
-                  booking_response = bookings_table.get_item(Key={'booking_id': booking_id})
-                  if 'Item' not in booking_response:
-                      print(f"Booking not found: {booking_id}")
-                      return
-                  
-                  booking = booking_response['Item']
-                  if booking['status'] != 'PENDING':
-                      print(f"Booking not pending: {booking_id}")
-                      return
-                  
-                  # Check bike availability
-                  bike_response = bikes_table.get_item(Key={'bike_id': bike_id})
-                  if 'Item' not in bike_response:
-                      # Cancel booking - bike not found
-                      cancel_booking_with_reason(booking_id, "Bike no longer available")
-                      return
-                  
-                  bike = bike_response['Item']
-                  if bike.get('status') != 'ACTIVE':
-                      # Cancel booking - bike inactive
-                      cancel_booking_with_reason(booking_id, "Bike no longer available")
-                      return
-                  
-                  # Check availability for the date
-                  existing_bookings = bookings_table.query(
-                      IndexName='BikeBookings',
-                      KeyConditionExpression=Key('bike_id').eq(bike_id) & Key('date').eq(date),
-                      FilterExpression='#status IN (:confirmed, :pending)',
-                      ExpressionAttributeNames={'#status': 'status'},
-                      ExpressionAttributeValues={
-                          ':confirmed': 'CONFIRMED',
-                          ':pending': 'PENDING'
-                      }
-                  )
-                  
-                  booked_count = len(existing_bookings['Items'])
-                  if booked_count > int(bike['count']):
-                      # Cancel booking - no availability
-                      cancel_booking_with_reason(booking_id, "No availability for this date")
-                      return
-                  
-                  # Auto-approve booking
-                  access_code = booking.get('accessCode', 'AUTO' + booking_id[:6])
-                  
-                  bookings_table.update_item(
-                      Key={'booking_id': booking_id},
-                      UpdateExpression='SET #status = :status, accessCode = :code, approvedAt = :approved',
-                      ExpressionAttributeNames={'#status': 'status'},
-                      ExpressionAttributeValues={
-                          ':status': 'CONFIRMED',
-                          ':code': access_code,
-                          ':approved': datetime.now().isoformat()
-                      }
-                  )
-                  
-                  # Send approval notification
-                  send_notification(
-                      f"Your booking {booking_id} has been automatically approved! Access code: {access_code}",
-                      "Booking Approved"
-                  )
-                  
-                  print(f"Booking approved: {booking_id}")
+                  return {'statusCode': 200, 'body': 'Inventory sync completed'}
                   
               except Exception as e:
-                  print(f"Error processing booking approval: {str(e)}")
+                  print(f"Error in inventory sync: {str(e)}")
+                  return {'statusCode': 500, 'body': 'Inventory sync failed'}
           
-          def cancel_booking_with_reason(booking_id, reason):
+          def process_bike_change(record):
               try:
-                  bookings_table = dynamodb.Table(os.environ['BOOKINGS_TABLE'])
+                  event_name = record['eventName']
                   
-                  bookings_table.update_item(
-                      Key={'booking_id': booking_id},
-                      UpdateExpression='SET #status = :status, cancellationReason = :reason, cancelledAt = :cancelled',
-                      ExpressionAttributeNames={'#status': 'status'},
-                      ExpressionAttributeValues={
-                          ':status': 'CANCELLED',
-                          ':reason': reason,
-                          ':cancelled': datetime.now().isoformat()
-                      }
-                  )
-                  
-                  # Send cancellation notification
-                  send_notification(
-                      f"Your booking {booking_id} was cancelled: {reason}",
-                      "Booking Cancelled"
-                  )
-                  
-                  print(f"Booking cancelled: {booking_id} - {reason}")
-                  
+                  if event_name == 'INSERT':
+                      # New bike added - no inventory update needed as there are no bookings yet
+                      bike_data = record['dynamodb']['NewImage']
+                      print(f"New bike added: {bike_data}")
+                      
+                  elif event_name == 'MODIFY':
+                      # Bike modified - check if count changed
+                      old_data = record['dynamodb'].get('OldImage', {})
+                      new_data = record['dynamodb']['NewImage']
+                      
+                      old_count = int(old_data.get('count', {}).get('N', 0))
+                      new_count = int(new_data.get('count', {}).get('N', 0))
+                      
+                      if old_count != new_count:
+                          bike_id = new_data['bike_id']['S']
+                          franchise_id = new_data['franchise_id']['S']
+                          
+                          print(f"Bike count changed: {bike_id}, {old_count} -> {new_count}")
+                          
+                          # Send real-time update notification
+                          send_real_time_update({
+                              'type': 'bike_count_updated',
+                              'bike_id': bike_id,
+                              'franchise_id': franchise_id,
+                              'old_count': old_count,
+                              'new_count': new_count,
+                              'timestamp': datetime.now().isoformat()
+                          })
+                      
+                  elif event_name == 'REMOVE':
+                      # Bike removed/deactivated
+                      bike_data = record['dynamodb']['OldImage']
+                      bike_id = bike_data['bike_id']['S']
+                      franchise_id = bike_data['franchise_id']['S']
+                      
+                      print(f"Bike removed: {bike_id}")
+                      
+                      send_real_time_update({
+                          'type': 'bike_removed',
+                          'bike_id': bike_id,
+                          'franchise_id': franchise_id,
+                          'timestamp': datetime.now().isoformat()
+                      })
+                      
               except Exception as e:
-                  print(f"Error cancelling booking: {str(e)}")
+                  print(f"Error processing bike change: {str(e)}")
           
-          def send_notification(message, subject):
+          def send_real_time_update(update_data):
               try:
                   sns.publish(
-                      TopicArn=os.environ['CUSTOMER_NOTIFICATIONS_TOPIC'],
-                      Message=message,
-                      Subject=subject
+                      TopicArn=os.environ['INVENTORY_UPDATES_TOPIC'],
+                      Message=json.dumps(update_data),
+                      Subject=f"Real-time Inventory Update - {update_data.get('type', 'update')}"
                   )
+                  print(f"Real-time update sent: {update_data}")
               except Exception as e:
-                  print(f"Error sending notification: {str(e)}")
+                  print(f"Error sending real-time update: {str(e)}")
 
-  # API GATEWAY RESOURCES 
-  
-  # BIKES RESOURCE for Customer and Franchise owners
+  # API GATEWAY RESOURCES AND METHODS
+
+  # Bikes Resource
   BikesResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -2472,7 +1762,7 @@ Resources:
       ParentId: !Ref BikeIdResource
       PathPart: 'feedback'
 
-  # BOOKINGS RESOURCE (Customer + Franchise)
+  # Bookings Resource
   BookingsResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -2487,27 +1777,6 @@ Resources:
       ParentId: !Ref BookingsResource
       PathPart: '{booking_id}'
 
-  BookingApproveResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ParentId: !Ref BookingIdResource
-      PathPart: 'approve'
-
-  BookingCancelApproveResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ParentId: !Ref BookingIdResource
-      PathPart: 'cancel-approve'
-
-  BookingCancelRejectResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ParentId: !Ref BookingIdResource
-      PathPart: 'cancel-reject'
-
   BookingMessagesResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -2515,7 +1784,7 @@ Resources:
       ParentId: !Ref BookingIdResource
       PathPart: 'messages'
 
-  # MESSAGES RESOURCE 
+  # Messages Resource
   MessagesResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -2530,85 +1799,7 @@ Resources:
       ParentId: !Ref MessagesResource
       PathPart: 'conversations'
 
-  MessageConversationIdResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ParentId: !Ref MessageConversationsResource
-      PathPart: '{booking_id}'
-
-  # FRANCHISE RESOURCE
-  FranchiseResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ParentId: !Ref APIGatewayRootResourceId
-      PathPart: 'franchise'
-
-  FranchiseBookingsResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ParentId: !Ref FranchiseResource
-      PathPart: 'bookings'
-
-  FranchiseCancellationsResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ParentId: !Ref FranchiseResource
-      PathPart: 'cancellations'
-
-  FranchiseCustomersResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ParentId: !Ref FranchiseResource
-      PathPart: 'customers'
-
-  FranchiseCustomerIdResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ParentId: !Ref FranchiseCustomersResource
-      PathPart: '{customer_id}'
-
-  FranchiseCustomerBookingsResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ParentId: !Ref FranchiseCustomerIdResource
-      PathPart: 'bookings'
-
-  FranchiseCustomerMessagesResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ParentId: !Ref FranchiseCustomerIdResource
-      PathPart: 'messages'
-
-  FranchiseConversationsResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ParentId: !Ref FranchiseResource
-      PathPart: 'conversations'
-
-  FranchiseConversationIdResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ParentId: !Ref FranchiseConversationsResource
-      PathPart: '{customer_id}'
-
-  FranchiseDashboardResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ParentId: !Ref FranchiseResource
-      PathPart: 'dashboard'
-
-  # CUSTOMERS RESOURCE
+  # Customer Resources
   CustomersResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -2623,9 +1814,45 @@ Resources:
       ParentId: !Ref CustomersResource
       PathPart: 'profile'
 
-  # API GATEWAY METHODS
+  # Franchise Resources
+  FranchiseResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ParentId: !Ref APIGatewayRootResourceId
+      PathPart: 'franchise'
 
-  # PUBLIC METHODS for Guests, Customer, and Frnachise Owner
+  FranchiseBookingsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ParentId: !Ref FranchiseResource
+      PathPart: 'bookings'
+
+  FranchiseCustomersResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ParentId: !Ref FranchiseResource
+      PathPart: 'customers'
+
+  FranchiseDashboardResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ParentId: !Ref FranchiseResource
+      PathPart: 'dashboard'
+
+  FranchiseConversationsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ParentId: !Ref FranchiseResource
+      PathPart: 'conversations'
+
+  # API METHODS
+
+  # Public Methods (No Authentication Required)
   BikesGetMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -2633,10 +1860,6 @@ Resources:
       ResourceId: !Ref BikesResource
       HttpMethod: GET
       AuthorizationType: NONE
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
@@ -2651,16 +1874,12 @@ Resources:
       AuthorizationType: NONE
       RequestParameters:
         method.request.path.bike_id: true
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PublicBikesFunction.Arn}/invocations'
 
-  # CUSTOMER AUTHENTICATED METHODS
+  # Customer Methods (Authentication Required)
   BookingsPostMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -2669,10 +1888,6 @@ Resources:
       HttpMethod: POST
       AuthorizationType: COGNITO_USER_POOLS
       AuthorizerId: !Ref CognitoAuthorizer
-      MethodResponses:
-        - StatusCode: '201'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
@@ -2686,10 +1901,6 @@ Resources:
       HttpMethod: GET
       AuthorizationType: COGNITO_USER_POOLS
       AuthorizerId: !Ref CognitoAuthorizer
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
@@ -2705,10 +1916,6 @@ Resources:
       AuthorizerId: !Ref CognitoAuthorizer
       RequestParameters:
         method.request.path.booking_id: true
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
@@ -2722,27 +1929,6 @@ Resources:
       HttpMethod: GET
       AuthorizationType: COGNITO_USER_POOLS
       AuthorizerId: !Ref CognitoAuthorizer
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
-
-  CustomerProfilePutMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ResourceId: !Ref CustomerProfileResource
-      HttpMethod: PUT
-      AuthorizationType: COGNITO_USER_POOLS
-      AuthorizerId: !Ref CognitoAuthorizer
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
@@ -2758,10 +1944,19 @@ Resources:
       AuthorizerId: !Ref CognitoAuthorizer
       RequestParameters:
         method.request.path.bike_id: true
-      MethodResponses:
-        - StatusCode: '201'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
+
+  MessagesPostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref MessagesResource
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref CognitoAuthorizer
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
@@ -2777,10 +1972,6 @@ Resources:
       AuthorizerId: !Ref CognitoAuthorizer
       RequestParameters:
         method.request.path.booking_id: true
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
@@ -2794,35 +1985,12 @@ Resources:
       HttpMethod: GET
       AuthorizationType: COGNITO_USER_POOLS
       AuthorizerId: !Ref CognitoAuthorizer
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
 
-  MessageConversationGetMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ResourceId: !Ref MessageConversationIdResource
-      HttpMethod: GET
-      AuthorizationType: COGNITO_USER_POOLS
-      AuthorizerId: !Ref CognitoAuthorizer
-      RequestParameters:
-        method.request.path.booking_id: true
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
-
-  # FRANCHISE AUTHENTICATED METHODS
+  # Franchise Methods (Authentication Required)
   BikesPostMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -2831,10 +1999,6 @@ Resources:
       HttpMethod: POST
       AuthorizationType: COGNITO_USER_POOLS
       AuthorizerId: !Ref CognitoAuthorizer
-      MethodResponses:
-        - StatusCode: '201'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
@@ -2850,10 +2014,6 @@ Resources:
       AuthorizerId: !Ref CognitoAuthorizer
       RequestParameters:
         method.request.path.bike_id: true
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
@@ -2869,10 +2029,6 @@ Resources:
       AuthorizerId: !Ref CognitoAuthorizer
       RequestParameters:
         method.request.path.bike_id: true
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
@@ -2886,103 +2042,6 @@ Resources:
       HttpMethod: GET
       AuthorizationType: COGNITO_USER_POOLS
       AuthorizerId: !Ref CognitoAuthorizer
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
-
-  BookingGetMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ResourceId: !Ref BookingIdResource
-      HttpMethod: GET
-      AuthorizationType: COGNITO_USER_POOLS
-      AuthorizerId: !Ref CognitoAuthorizer
-      RequestParameters:
-        method.request.path.booking_id: true
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
-
-  BookingApprovePutMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ResourceId: !Ref BookingApproveResource
-      HttpMethod: PUT
-      AuthorizationType: COGNITO_USER_POOLS
-      AuthorizerId: !Ref CognitoAuthorizer
-      RequestParameters:
-        method.request.path.booking_id: true
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
-
-  FranchiseCancellationsGetMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ResourceId: !Ref FranchiseCancellationsResource
-      HttpMethod: GET
-      AuthorizationType: COGNITO_USER_POOLS
-      AuthorizerId: !Ref CognitoAuthorizer
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
-
-  BookingCancelApprovePutMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ResourceId: !Ref BookingCancelApproveResource
-      HttpMethod: PUT
-      AuthorizationType: COGNITO_USER_POOLS
-      AuthorizerId: !Ref CognitoAuthorizer
-      RequestParameters:
-        method.request.path.booking_id: true
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
-
-  BookingCancelRejectPutMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ResourceId: !Ref BookingCancelRejectResource
-      HttpMethod: PUT
-      AuthorizationType: COGNITO_USER_POOLS
-      AuthorizerId: !Ref CognitoAuthorizer
-      RequestParameters:
-        method.request.path.booking_id: true
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
@@ -2996,103 +2055,6 @@ Resources:
       HttpMethod: GET
       AuthorizationType: COGNITO_USER_POOLS
       AuthorizerId: !Ref CognitoAuthorizer
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
-
-  FranchiseCustomerGetMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ResourceId: !Ref FranchiseCustomerIdResource
-      HttpMethod: GET
-      AuthorizationType: COGNITO_USER_POOLS
-      AuthorizerId: !Ref CognitoAuthorizer
-      RequestParameters:
-        method.request.path.customer_id: true
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
-
-  FranchiseCustomerBookingsGetMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ResourceId: !Ref FranchiseCustomerBookingsResource
-      HttpMethod: GET
-      AuthorizationType: COGNITO_USER_POOLS
-      AuthorizerId: !Ref CognitoAuthorizer
-      RequestParameters:
-        method.request.path.customer_id: true
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
-
-  FranchiseCustomerMessagesGetMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ResourceId: !Ref FranchiseCustomerMessagesResource
-      HttpMethod: GET
-      AuthorizationType: COGNITO_USER_POOLS
-      AuthorizerId: !Ref CognitoAuthorizer
-      RequestParameters:
-        method.request.path.customer_id: true
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
-
-  FranchiseConversationsGetMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ResourceId: !Ref FranchiseConversationsResource
-      HttpMethod: GET
-      AuthorizationType: COGNITO_USER_POOLS
-      AuthorizerId: !Ref CognitoAuthorizer
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
-
-  FranchiseConversationGetMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ResourceId: !Ref FranchiseConversationIdResource
-      HttpMethod: GET
-      AuthorizationType: COGNITO_USER_POOLS
-      AuthorizerId: !Ref CognitoAuthorizer
-      RequestParameters:
-        method.request.path.customer_id: true
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
@@ -3106,173 +2068,25 @@ Resources:
       HttpMethod: GET
       AuthorizationType: COGNITO_USER_POOLS
       AuthorizerId: !Ref CognitoAuthorizer
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
 
-  # MESSAGES METHODS
-  MessagesPostMethod:
+  FranchiseConversationsGetMethod:
     Type: AWS::ApiGateway::Method
     Properties:
       RestApiId: !Ref APIGatewayId
-      ResourceId: !Ref MessagesResource
-      HttpMethod: POST
-      AuthorizationType: COGNITO_USER_POOLS
-      AuthorizerId: !Ref CognitoAuthorizer
-      MethodResponses:
-        - StatusCode: '201'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
-
-  MessagesGetMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ResourceId: !Ref MessagesResource
+      ResourceId: !Ref FranchiseConversationsResource
       HttpMethod: GET
       AuthorizationType: COGNITO_USER_POOLS
       AuthorizerId: !Ref CognitoAuthorizer
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
 
-  # METHODS FOR CORS
-  BikesOptionsMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ResourceId: !Ref BikesResource
-      HttpMethod: OPTIONS
-      AuthorizationType: NONE
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
-      Integration:
-        Type: MOCK
-        RequestTemplates:
-          application/json: '{"statusCode": 200}'
-        IntegrationResponses:
-          - StatusCode: '200'
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              method.response.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
-
-  BikeIdOptionsMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ResourceId: !Ref BikeIdResource
-      HttpMethod: OPTIONS
-      AuthorizationType: NONE
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
-      Integration:
-        Type: MOCK
-        RequestTemplates:
-          application/json: '{"statusCode": 200}'
-        IntegrationResponses:
-          - StatusCode: '200'
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              method.response.header.Access-Control-Allow-Methods: "'PUT,DELETE,OPTIONS'"
-
-  BikeFeedbackOptionsMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ResourceId: !Ref BikeFeedbackResource
-      HttpMethod: OPTIONS
-      AuthorizationType: NONE
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
-      Integration:
-        Type: MOCK
-        RequestTemplates:
-          application/json: '{"statusCode": 200}'
-        IntegrationResponses:
-          - StatusCode: '200'
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              method.response.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
-
-  BookingsOptionsMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ResourceId: !Ref BookingsResource
-      HttpMethod: OPTIONS
-      AuthorizationType: NONE
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
-      Integration:
-        Type: MOCK
-        RequestTemplates:
-          application/json: '{"statusCode": 200}'
-        IntegrationResponses:
-          - StatusCode: '200'
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              method.response.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
-
-  BookingIdOptionsMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref APIGatewayId
-      ResourceId: !Ref BookingIdResource
-      HttpMethod: OPTIONS
-      AuthorizationType: NONE
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
-      Integration:
-        Type: MOCK
-        RequestTemplates:
-          application/json: '{"statusCode": 200}'
-        IntegrationResponses:
-          - StatusCode: '200'
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              method.response.header.Access-Control-Allow-Methods: "'GET,DELETE,OPTIONS'"
-
   # LAMBDA PERMISSIONS
-  
   PublicBikesLambdaPermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -3289,15 +2103,15 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${APIGatewayId}/*/*'
 
-  # SQS EVENT SOURCE MAPPING 
-  
-  BookingQueueEventSource:
+  # DynamoDB STREAM EVENT SOURCE MAPPING
+  BikesTableStreamMapping:
     Type: AWS::Lambda::EventSourceMapping
     Properties:
-      EventSourceArn: !GetAtt BookingRequestQueue.Arn
-      FunctionName: !GetAtt BookingProcessorFunction.Arn
-      BatchSize: 5
+      EventSourceArn: !GetAtt BikesTable.StreamArn
+      FunctionName: !GetAtt InventorySyncFunction.Arn
+      StartingPosition: TRIM_HORIZON
       MaximumBatchingWindowInSeconds: 10
+      BatchSize: 10
 
 Outputs:
   # API Endpoints - Public (No Auth Required)
@@ -3323,13 +2137,13 @@ Outputs:
     Value: !Sub 'https://${APIGatewayId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/messages'
 
   # API Endpoints - Franchise (Auth Required)
+  FranchiseBikesEndpoint:
+    Description: 'Franchise Bike Management API Endpoint (Auth Required)'
+    Value: !Sub 'https://${APIGatewayId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/bikes'
+
   FranchiseBookingsEndpoint:
     Description: 'Franchise Bookings Management Endpoint (Auth Required)'
     Value: !Sub 'https://${APIGatewayId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/franchise/bookings'
-
-  FranchiseCancellationsEndpoint:
-    Description: 'Franchise Cancellation Requests Endpoint (Auth Required)'
-    Value: !Sub 'https://${APIGatewayId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/franchise/cancellations'
 
   FranchiseCustomersEndpoint:
     Description: 'Franchise Customer Management Endpoint (Auth Required)'
@@ -3339,7 +2153,7 @@ Outputs:
     Description: 'Franchise Dashboard API Endpoint (Auth Required)'
     Value: !Sub 'https://${APIGatewayId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/franchise/dashboard'
 
-  # Table Names 
+  # Table Names
   BikesTableName:
     Description: 'DynamoDB Bikes table name'
     Value: !Ref BikesTable
@@ -3351,6 +2165,12 @@ Outputs:
     Value: !Ref BookingsTable
     Export:
       Name: !Sub '${AWS::StackName}-BookingsTableName'
+
+  BikeInventoryTableName:
+    Description: 'DynamoDB Bike Inventory table name'
+    Value: !Ref BikeInventoryTable
+    Export:
+      Name: !Sub '${AWS::StackName}-BikeInventoryTableName'
 
   FeedbackTableName:
     Description: 'DynamoDB Feedback table name'
@@ -3364,28 +2184,22 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-MessagesTableName'
 
-  CancellationRequestsTableName:
-    Description: 'DynamoDB Cancellation Requests table name'
-    Value: !Ref CancellationRequestsTable
-    Export:
-      Name: !Sub '${AWS::StackName}-CancellationRequestsTableName'
-
   # Queue URLs
-  BookingRequestQueueUrl:
-    Description: 'Booking Request SQS Queue URL'
-    Value: !Ref BookingRequestQueue
+  BookingProcessingQueueUrl:
+    Description: 'Booking Processing SQS Queue URL'
+    Value: !Ref BookingProcessingQueue
     Export:
-      Name: !Sub '${AWS::StackName}-BookingRequestQueueUrl'
+      Name: !Sub '${AWS::StackName}-BookingProcessingQueueUrl'
 
   # Topic ARNs
-  CustomerNotificationsTopicArn:
-    Description: 'Customer Notifications SNS Topic ARN'
-    Value: !Ref CustomerNotificationsTopic
+  BookingNotificationsTopicArn:
+    Description: 'Booking Notifications SNS Topic ARN'
+    Value: !Ref BookingNotificationsTopic
     Export:
-      Name: !Sub '${AWS::StackName}-CustomerNotificationsTopicArn'
+      Name: !Sub '${AWS::StackName}-BookingNotificationsTopicArn'
 
-  FranchiseNotificationsTopicArn:
-    Description: 'Franchise Notifications SNS Topic ARN'
-    Value: !Ref FranchiseNotificationsTopic
+  InventoryUpdatesTopicArn:
+    Description: 'Inventory Updates SNS Topic ARN'
+    Value: !Ref InventoryUpdatesTopic
     Export:
-      Name: !Sub '${AWS::StackName}-FranchiseNotificationsTopicArn'
+      Name: !Sub '${AWS::StackName}-InventoryUpdatesTopicArn'
