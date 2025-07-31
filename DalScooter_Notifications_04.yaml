@@ -1,4 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
+
 Description: 'DALScooter Notification Module - Personal Email Notifications via SNS/SQS'
 
 Parameters:
@@ -10,22 +11,34 @@ Parameters:
   Environment:
     Type: String
     Default: 'dev'
-    AllowedValues: 
+    AllowedValues:
       - dev
       - prod
     Description: 'Environment name'
-    
+  
   RegistrationTopicArn:
     Type: String
     Description: 'ARN of the existing Registration SNS Topic from Module 1'
-    
+  
   LoginTopicArn:
     Type: String
     Description: 'ARN of the existing Login SNS Topic from Module 1'
-
+  
+  BookingNotificationsTopicArn:
+    Type: String
+    Description: 'ARN of the existing Booking Notifications SNS Topic from Module 2'
+  
   UserNotificationTopicsTableName:
     Type: String
     Description: 'Name of the User Notification Topics table from Module 1'
+  
+  UsersTableName:
+    Type: String
+    Description: 'Name of the Users table from Module 1'
+  
+  BikesTableName:
+    Type: String
+    Description: 'Name of the Bikes table from Module 2'
 
 Resources:
   # SQS Queue for Registration Notifications
@@ -55,6 +68,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  # SQS Queue for Login Notifications
   LoginNotificationQueue:
     Type: AWS::SQS::Queue
     Properties:
@@ -81,6 +95,34 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  # SQS Queue for Booking Notifications (NEW)
+  BookingNotificationQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${ProjectName}-Booking-Notifications-Queue-${Environment}'
+      VisibilityTimeout: 300
+      MessageRetentionPeriod: 1209600
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt BookingNotificationDLQ.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  BookingNotificationDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${ProjectName}-Booking-Notifications-DLQ-${Environment}'
+      MessageRetentionPeriod: 1209600
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # SNS Subscriptions
   RegistrationQueueSubscription:
     Type: AWS::SNS::Subscription
     Properties:
@@ -95,6 +137,15 @@ Resources:
       Protocol: sqs
       Endpoint: !GetAtt LoginNotificationQueue.Arn
 
+  # NEW: Booking Notifications Subscription
+  BookingQueueSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref BookingNotificationsTopicArn
+      Protocol: sqs
+      Endpoint: !GetAtt BookingNotificationQueue.Arn
+
+  # SQS Queue Policies
   RegistrationQueuePolicy:
     Type: AWS::SQS::QueuePolicy
     Properties:
@@ -127,6 +178,24 @@ Resources:
               ArnEquals:
                 aws:SourceArn: !Ref LoginTopicArn
 
+  # NEW: Booking Queue Policy
+  BookingQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref BookingNotificationQueue
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt BookingNotificationQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref BookingNotificationsTopicArn
+
+  # DynamoDB Table for Notification Tracking
   NotificationDeliveryTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -172,6 +241,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  # Lambda Functions
   RegistrationEmailProcessor:
     Type: AWS::Lambda::Function
     Properties:
@@ -194,10 +264,10 @@ Resources:
           import uuid
           import os
           from datetime import datetime, timedelta
-          
+
           sns = boto3.client('sns')
           dynamodb = boto3.resource('dynamodb')
-          
+
           def lambda_handler(event, context):
               print(f"Registration email processor event: {json.dumps(event)}")
               
@@ -224,9 +294,10 @@ Resources:
                       # Get user's personal topic ARN if not provided
                       if not user_topic_arn:
                           user_topic_arn = get_user_topic_arn(topics_table, user_id)
-                          if not user_topic_arn:
-                              print(f"No personal topic found for user: {user_id}")
-                              continue
+                      
+                      if not user_topic_arn:
+                          print(f"No personal topic found for user: {user_id}")
+                          continue
                       
                       notification_id = str(uuid.uuid4())
                       
@@ -250,7 +321,7 @@ Resources:
                       continue
               
               return {'statusCode': 200, 'body': 'Registration notifications processed'}
-          
+
           def get_user_topic_arn(topics_table, user_id):
               try:
                   response = topics_table.get_item(Key={'userId': user_id})
@@ -260,7 +331,7 @@ Resources:
               except Exception as e:
                   print(f"Error getting user topic ARN: {str(e)}")
                   return None
-          
+
           def send_registration_notification(email, user_id, user_type, notification_id, topic_arn):
               try:
                   if user_type.lower() == 'franchise':
@@ -275,23 +346,23 @@ Resources:
                   subject = "DALScooter Registration Successful!"
                   
                   message = f"""
-                  🛴 {welcome_message}
-                  
-                  Account Details:
-                  Email: {email}
-                  User ID: {user_id}
-                  Account Type: {user_type_display}
-                  Registration: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}
-                  
-                  What's Next:
-                  {features}
-                  
-                  Security: 3-factor authentication enabled
-                  Support: support@dalscooter.com | 1-800-DAL-SCOOT
-                  
-                  © 2025 DALScooter
-                  Notification ID: {notification_id}
-                  """
+          {welcome_message}
+
+          Account Details:
+          Email: {email}
+          User ID: {user_id}
+          Account Type: {user_type_display}
+          Registration: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}
+
+          What's Next:
+          {features}
+
+          Security: 3-factor authentication enabled
+          Support: support@dalscooter.com | 1-800-DAL-SCOOT
+
+          © 2025 DALScooter
+          Notification ID: {notification_id}
+          """
                   
                   # Send notification to user's personal topic
                   response = sns.publish(
@@ -306,7 +377,7 @@ Resources:
               except Exception as e:
                   print(f"Failed to send registration notification: {str(e)}")
                   return False
-          
+
           def log_notification_delivery(table, notification_id, user_id, email, notification_type, status, timestamp):
               try:
                   table.put_item(
@@ -347,10 +418,10 @@ Resources:
           import uuid
           import os
           from datetime import datetime, timedelta
-          
+
           sns = boto3.client('sns')
           dynamodb = boto3.resource('dynamodb')
-          
+
           def lambda_handler(event, context):
               print(f"Login email processor event: {json.dumps(event)}")
               
@@ -377,9 +448,10 @@ Resources:
                       # Get user's personal topic ARN if not provided
                       if not user_topic_arn:
                           user_topic_arn = get_user_topic_arn(topics_table, user_id)
-                          if not user_topic_arn:
-                              print(f"No personal topic found for user: {user_id}")
-                              continue
+                      
+                      if not user_topic_arn:
+                          print(f"No personal topic found for user: {user_id}")
+                          continue
                       
                       notification_id = str(uuid.uuid4())
                       
@@ -402,7 +474,7 @@ Resources:
                       continue
               
               return {'statusCode': 200, 'body': 'Login notifications processed'}
-          
+
           def get_user_topic_arn(topics_table, user_id):
               try:
                   response = topics_table.get_item(Key={'userId': user_id})
@@ -412,7 +484,7 @@ Resources:
               except Exception as e:
                   print(f"Error getting user topic ARN: {str(e)}")
                   return None
-          
+
           def send_login_notification(email, user_id, user_type, login_time, notification_id, topic_arn):
               try:
                   try:
@@ -431,25 +503,25 @@ Resources:
                   subject = "DALScooter - Successful Login Alert"
                   
                   message = f"""
-                  Login Successful - Welcome back to DALScooter!
-                  
-                  Login Details:
-                  Account: {email}
-                  User Type: {user_type_display}
-                  Login Time: {formatted_time}
-                  User ID: {user_id}
-                  Authentication: 3-Factor Security
-                  
-                  {dashboard_info}
-                  
-                  Security Notice:
-                  If this wasn't you, contact support immediately at support@dalscooter.com
-                  
-                  Support: support@dalscooter.com | 1-800-DAL-SCOOT
-                  
-                  © 2025 DALScooter
-                  Notification ID: {notification_id}
-                  """
+          Login Successful - Welcome back to DALScooter!
+
+          Login Details:
+          Account: {email}
+          User Type: {user_type_display}
+          Login Time: {formatted_time}
+          User ID: {user_id}
+          Authentication: 3-Factor Security
+
+          {dashboard_info}
+
+          Security Notice:
+          If this wasn't you, contact support immediately at support@dalscooter.com
+
+          Support: support@dalscooter.com | 1-800-DAL-SCOOT
+
+          © 2025 DALScooter
+          Notification ID: {notification_id}
+          """
                   
                   # Send notification to user's personal topic
                   response = sns.publish(
@@ -464,7 +536,7 @@ Resources:
               except Exception as e:
                   print(f"Failed to send login notification: {str(e)}")
                   return False
-          
+
           def log_notification_delivery(table, notification_id, user_id, email, notification_type, status, timestamp):
               try:
                   table.put_item(
@@ -483,6 +555,299 @@ Resources:
               except Exception as e:
                   print(f"Failed to log notification delivery: {str(e)}")
 
+  # NEW: Booking Email Processor
+  BookingEmailProcessor:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-BookingEmailProcessor-${Environment}'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !Sub 'arn:aws:iam::${AWS::AccountId}:role/LabRole'
+      Timeout: 60
+      MemorySize: 256
+      Environment:
+        Variables:
+          NOTIFICATION_TABLE: !Ref NotificationDeliveryTable
+          USER_NOTIFICATION_TOPICS_TABLE: !Ref UserNotificationTopicsTableName
+          USERS_TABLE: !Ref UsersTableName
+          BIKES_TABLE: !Ref BikesTableName
+          ENVIRONMENT: !Ref Environment
+          PROJECT_NAME: !Ref ProjectName
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import uuid
+          import os
+          from datetime import datetime, timedelta
+
+          sns = boto3.client('sns')
+          dynamodb = boto3.resource('dynamodb')
+
+          def lambda_handler(event, context):
+              print(f"Booking email processor event: {json.dumps(event)}")
+              
+              notification_table = dynamodb.Table(os.environ['NOTIFICATION_TABLE'])
+              topics_table = dynamodb.Table(os.environ['USER_NOTIFICATION_TOPICS_TABLE'])
+              users_table = dynamodb.Table(os.environ['USERS_TABLE'])
+              bikes_table = dynamodb.Table(os.environ['BIKES_TABLE'])
+              
+              for record in event['Records']:
+                  try:
+                      message_body = json.loads(record['body'])
+                      sns_message = json.loads(message_body['Message'])
+                      
+                      print(f"Processing booking notification: {sns_message}")
+                      
+                      notification_type = sns_message.get('type', '')
+                      customer_id = sns_message.get('customer_id', '')
+                      booking_id = sns_message.get('booking_id', '')
+                      bike_id = sns_message.get('bike_id', '')
+                      booking_date = sns_message.get('date', '')
+                      access_code = sns_message.get('access_code', '')
+                      reason = sns_message.get('reason', '')
+                      refund_eligible = sns_message.get('refund_eligible', False)
+                      
+                      if not customer_id or not booking_id:
+                          print(f"Invalid notification data: missing customer_id or booking_id")
+                          continue
+                      
+                      # Get customer details
+                      customer_info = get_customer_info(users_table, customer_id)
+                      if not customer_info:
+                          print(f"Customer not found: {customer_id}")
+                          continue
+                      
+                      # Get customer's personal topic ARN
+                      user_topic_arn = get_user_topic_arn(topics_table, customer_id)
+                      if not user_topic_arn:
+                          print(f"No personal topic found for customer: {customer_id}")
+                          continue
+                      
+                      # Get bike details if bike_id is provided
+                      bike_info = None
+                      if bike_id:
+                          bike_info = get_bike_info(bikes_table, bike_id)
+                      
+                      notification_id = str(uuid.uuid4())
+                      
+                      # Send appropriate notification based on type
+                      email_sent = False
+                      if notification_type == 'booking_confirmed':
+                          email_sent = send_booking_confirmation_notification(
+                              customer_info, booking_id, bike_info, booking_date, 
+                              access_code, notification_id, user_topic_arn
+                          )
+                      elif notification_type == 'booking_cancelled':
+                          email_sent = send_booking_cancellation_notification(
+                              customer_info, booking_id, bike_info, booking_date,
+                              reason, refund_eligible, notification_id, user_topic_arn
+                          )
+                      
+                      log_notification_delivery(
+                          notification_table,
+                          notification_id,
+                          customer_id,
+                          customer_info['email'],
+                          notification_type,
+                          'sent' if email_sent else 'failed',
+                          datetime.now().isoformat()
+                      )
+                      
+                      print(f"Booking notification ({notification_type}) {'sent' if email_sent else 'failed'} for customer: {customer_id}")
+                      
+                  except Exception as e:
+                      print(f"Error processing booking notification: {str(e)}")
+                      continue
+              
+              return {'statusCode': 200, 'body': 'Booking notifications processed'}
+
+          def get_customer_info(users_table, customer_id):
+              try:
+                  response = users_table.get_item(Key={'userId': customer_id})
+                  if 'Item' in response:
+                      return response['Item']
+                  return None
+              except Exception as e:
+                  print(f"Error getting customer info: {str(e)}")
+                  return None
+
+          def get_bike_info(bikes_table, bike_id):
+              try:
+                  response = bikes_table.get_item(Key={'bike_id': bike_id})
+                  if 'Item' in response:
+                      return response['Item']
+                  return None
+              except Exception as e:
+                  print(f"Error getting bike info: {str(e)}")
+                  return None
+
+          def get_user_topic_arn(topics_table, user_id):
+              try:
+                  response = topics_table.get_item(Key={'userId': user_id})
+                  if 'Item' in response:
+                      return response['Item'].get('notificationTopicArn')
+                  return None
+              except Exception as e:
+                  print(f"Error getting user topic ARN: {str(e)}")
+                  return None
+
+          def send_booking_confirmation_notification(customer_info, booking_id, bike_info, booking_date, access_code, notification_id, topic_arn):
+              try:
+                  email = customer_info['email']
+                  bike_type = bike_info['type'] if bike_info else 'Scooter'
+                  daily_rate = bike_info.get('dailyRate', 'N/A') if bike_info else 'N/A'
+                  
+                  try:
+                      formatted_date = datetime.strptime(booking_date, '%Y-%m-%d').strftime('%B %d, %Y')
+                  except:
+                      formatted_date = booking_date
+                  
+                  subject = "DALScooter - Booking Confirmed!"
+                  
+                  message = f"""
+          Great news! Your DALScooter booking is confirmed!
+
+          BOOKING DETAILS:
+          Booking ID: {booking_id}
+          Scooter Type: {bike_type}
+          Rental Date: {formatted_date}
+          Daily Rate: ${daily_rate}
+          Access Code: {access_code}
+
+          CUSTOMER INFORMATION:
+          Email: {email}
+          Customer ID: {customer_info['userId']}
+
+          IMPORTANT INSTRUCTIONS:
+          Your Access Code: {access_code}
+          Use this code to unlock your scooter on {formatted_date}
+          Rental period: Full day access
+          Keep your access code secure and don't share it
+
+          CANCELLATION POLICY:
+          Free cancellation up to 24 hours before your rental date
+          Cancellations within 24 hours may not be eligible for refund
+
+          NEED HELP?
+          support@dalscooter.com
+          1-800-DAL-SCOOT
+          Use our in-app messaging for quick support
+
+          Thank you for choosing DALScooter!
+          © 2025 DALScooter
+
+          Notification ID: {notification_id}
+          """
+                  
+                  # Send notification to user's personal topic
+                  response = sns.publish(
+                      TopicArn=topic_arn,
+                      Message=message,
+                      Subject=subject
+                  )
+                  
+                  print(f"Booking confirmation sent to personal topic. MessageId: {response['MessageId']}")
+                  return True
+                  
+              except Exception as e:
+                  print(f"Failed to send booking confirmation: {str(e)}")
+                  return False
+
+          def send_booking_cancellation_notification(customer_info, booking_id, bike_info, booking_date, reason, refund_eligible, notification_id, topic_arn):
+              try:
+                  email = customer_info['email']
+                  bike_type = bike_info['type'] if bike_info else 'Scooter'
+                  
+                  try:
+                      formatted_date = datetime.strptime(booking_date, '%Y-%m-%d').strftime('%B %d, %Y')
+                  except:
+                      formatted_date = booking_date
+                  
+                  if refund_eligible:
+                      cancellation_status = "CANCELLED - Full Refund Eligible"
+                      refund_info = """
+          REFUND INFORMATION:
+          Status: Full refund eligible
+          Processing: 3-5 business days
+          Method: Original payment method
+          """
+                  else:
+                      cancellation_status = "CANCELLATION PROCESSED - No Refund"
+                      refund_info = """
+          💰 REFUND INFORMATION:
+          Status: Not eligible for refund (less than 24 hours notice)
+          Reason: Cancellation within restricted time period
+          Policy: Contact support for special circumstances
+          """
+                  
+                  subject = f"DALScooter - Booking Cancelled ({booking_id})"
+                  
+                  message = f"""
+          {cancellation_status}
+
+          CANCELLED BOOKING DETAILS:
+          Booking ID: {booking_id}
+          Scooter Type: {bike_type}
+          Original Date: {formatted_date}
+          Cancellation Reason: {reason.title() if reason else 'Customer request'}
+          Cancelled At: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}
+
+          CUSTOMER INFORMATION:
+          Email: {email}
+          Customer ID: {customer_info['userId']}
+
+          {refund_info}
+
+          BOOK AGAIN:
+          Ready for another ride? Check our availability
+          Browse scooters in the DALScooter app
+          Remember: Book early for the best rates!
+
+          NEED ASSISTANCE?
+          support@dalscooter.com
+          1-800-DAL-SCOOT
+          Contact us through the app for immediate help
+
+          We hope to serve you again soon!
+          © 2025 DALScooter
+
+          Notification ID: {notification_id}
+          """
+                  
+                  # Send notification to user's personal topic
+                  response = sns.publish(
+                      TopicArn=topic_arn,
+                      Message=message,
+                      Subject=subject
+                  )
+                  
+                  print(f"Booking cancellation sent to personal topic. MessageId: {response['MessageId']}")
+                  return True
+                  
+              except Exception as e:
+                  print(f"Failed to send booking cancellation: {str(e)}")
+                  return False
+
+          def log_notification_delivery(table, notification_id, user_id, email, notification_type, status, timestamp):
+              try:
+                  table.put_item(
+                      Item={
+                          'notificationId': notification_id,
+                          'timestamp': timestamp,
+                          'userId': user_id,
+                          'email': email,
+                          'notificationType': notification_type,
+                          'deliveryStatus': status,
+                          'createdAt': datetime.now().isoformat(),
+                          'ttl': int((datetime.now() + timedelta(days=90)).timestamp())
+                      }
+                  )
+                  print(f"Notification delivery logged: {notification_id}")
+              except Exception as e:
+                  print(f"Failed to log notification delivery: {str(e)}")
+
+  # Event Source Mappings
   RegistrationQueueEventSource:
     Type: AWS::Lambda::EventSourceMapping
     Properties:
@@ -499,6 +864,15 @@ Resources:
       BatchSize: 5
       MaximumBatchingWindowInSeconds: 10
 
+  # NEW: Booking Queue Event Source
+  BookingQueueEventSource:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt BookingNotificationQueue.Arn
+      FunctionName: !GetAtt BookingEmailProcessor.Arn
+      BatchSize: 5
+      MaximumBatchingWindowInSeconds: 10
+
 Outputs:
   RegistrationNotificationQueueUrl:
     Description: 'Registration Notification SQS Queue URL'
@@ -511,6 +885,13 @@ Outputs:
     Value: !Ref LoginNotificationQueue
     Export:
       Name: !Sub '${AWS::StackName}-LoginQueueUrl'
+
+  # NEW: Booking Notification Queue URL
+  BookingNotificationQueueUrl:
+    Description: 'Booking Notification SQS Queue URL'
+    Value: !Ref BookingNotificationQueue
+    Export:
+      Name: !Sub '${AWS::StackName}-BookingQueueUrl'
 
   NotificationDeliveryTableName:
     Description: 'Notification Delivery Tracking Table Name'
