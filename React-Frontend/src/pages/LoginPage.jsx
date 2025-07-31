@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 export default function LoginPage() {
   const [step, setStep] = useState(1);
@@ -13,12 +15,12 @@ export default function LoginPage() {
   const [caesarChallenge, setCaesarChallenge] = useState('');
   const [accessToken, setAccessToken] = useState('');
 
-  const API_BASE = "https://288cs0y4la.execute-api.us-east-1.amazonaws.com/dev/auth";
+  const API_BASE = import.meta.env.VITE_API_BASE;
 
   const handleStep1 = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post(`${API_BASE}/login`, {
+      const res = await axios.post(`${API_BASE}/auth/login`, {
         step: 1,
         username: email,
         password,
@@ -29,14 +31,17 @@ export default function LoginPage() {
       setSecurityQuestion(data.securityQuestion);
       setStep(data.nextStep);
     } catch (err) {
-      alert('Step 1 failed: ' + (err.response?.data?.message || err.message));
+      const message =
+        err?.response?.data?.message ||
+        (err?.response?.status === 401 ? 'Invalid username or password' : 'Something went wrong in Step 1');
+      toast.error(`Step 1 failed: ${message}`);
     }
   };
 
   const handleStep2 = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post(`${API_BASE}/login`, {
+      const res = await axios.post(`${API_BASE}/auth/login`, {
         step: 2,
         sessionId,
         userId,
@@ -47,14 +52,17 @@ export default function LoginPage() {
       setCaesarChallenge(data.caesarChallenge);
       setStep(data.nextStep);
     } catch (err) {
-      alert('Step 2 failed: ' + (err.response?.data?.message || err.message));
+      const message =
+        err?.response?.data?.message ||
+        (err?.response?.status === 401 ? 'Incorrect security answer' : 'Something went wrong in Step 2');
+      toast.error(`Step 2 failed: ${message}`);
     }
   };
 
   const handleStep3 = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post(`${API_BASE}/login`, {
+      const res = await axios.post(`${API_BASE}/auth/login`, {
         step: 3,
         sessionId,
         userId,
@@ -62,15 +70,22 @@ export default function LoginPage() {
       });
       const data = res.data;
       setAccessToken(data.accessToken);
-      localStorage.setItem('token', data.accessToken);
-      alert('Login successful!');
-      window.location.href = data.userType === 'franchise'
-        ? '/franchise-dashboard'
-        : '/customer-dashboard';
+      localStorage.setItem('accessToken', data.accessToken);
+      localStorage.setItem('sessionId', sessionId);
+      localStorage.setItem('userType', data.userType);
+      localStorage.setItem('email', email);
+
+      toast.success('Login successful!');
+      window.location.href =
+        data.userType === 'franchise' ? '/franchise-dashboard' : '/customer-dashboard';
     } catch (err) {
-      alert('Step 3 failed: ' + (err.response?.data?.message || err.message));
+      const message =
+        err?.response?.data?.message ||
+        (err?.response?.status === 401 ? 'Incorrect Caesar cipher solution' : 'Something went wrong in Step 3');
+      toast.error(`Step 3 failed: ${message}`);
     }
   };
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-blue-100 to-blue-200 flex items-center justify-center px-4 py-8">
@@ -157,6 +172,24 @@ export default function LoginPage() {
             >
               Next
             </button>
+            {/* Divider and Sign Up CTA */}
+<div className="relative mt-10">
+  <div className="absolute inset-0 flex items-center">
+    <div className="w-full border-t border-blue-200"></div>
+  </div>
+  <div className="relative flex justify-center text-sm">
+    <span className="bg-white px-2 text-blue-500">New to DALScooter?</span>
+  </div>
+</div>
+
+<button
+  type="button"
+  onClick={() => window.location.href = '/register'}
+  className="mt-4 w-full border border-blue-500 text-blue-600 font-medium py-2 rounded-xl hover:bg-blue-50 transition-all"
+>
+  Create your account
+</button>
+
           </form>
         )}
 

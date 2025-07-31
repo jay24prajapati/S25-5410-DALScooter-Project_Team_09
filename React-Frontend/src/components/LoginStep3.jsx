@@ -1,14 +1,7 @@
 import React from 'react';
 
-interface Props {
-  encryptedText: string;
-  decodedWord: string;
-  setDecodedWord: (value: string) => void;
-  onComplete: () => void;
-}
-
-const LoginStep3: React.FC<Props> = ({ encryptedText, decodedWord, setDecodedWord, onComplete }) => {
-  const handleSubmit = (e: React.FormEvent) => {
+const LoginStep3 = ({ encryptedText, decodedWord, setDecodedWord, onComplete }) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     // TODO: Validate decoded word
     onComplete();
@@ -27,10 +20,11 @@ const LoginStep3: React.FC<Props> = ({ encryptedText, decodedWord, setDecodedWor
           required
         />
       </div>
-      <button type="submit" className="btn btn-success">Login</button>
+      <button type="submit" className="btn btn-success">
+        Login
+      </button>
     </form>
   );
 };
 
 export default LoginStep3;
-
