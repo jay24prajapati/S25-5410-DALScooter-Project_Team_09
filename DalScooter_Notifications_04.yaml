@@ -346,7 +346,7 @@ Resources:
                   subject = "DALScooter Registration Successful!"
                   
                   message = f"""
-          🛴 {welcome_message}
+          {welcome_message}
 
           Account Details:
           Email: {email}
@@ -703,10 +703,10 @@ Resources:
                   except:
                       formatted_date = booking_date
                   
-                  subject = "🛴 DALScooter - Booking Confirmed!"
+                  subject = "DALScooter - Booking Confirmed!"
                   
                   message = f"""
-          🎉 Great news! Your DALScooter booking is confirmed!
+          Great news! Your DALScooter booking is confirmed!
 
           BOOKING DETAILS:
           Booking ID: {booking_id}
@@ -720,19 +720,19 @@ Resources:
           Customer ID: {customer_info['userId']}
 
           IMPORTANT INSTRUCTIONS:
-          🔐 Your Access Code: {access_code}
-          📍 Use this code to unlock your scooter on {formatted_date}
-          ⏰ Rental period: Full day access
-          🚫 Keep your access code secure and don't share it
+          Your Access Code: {access_code}
+          Use this code to unlock your scooter on {formatted_date}
+          Rental period: Full day access
+          Keep your access code secure and don't share it
 
           CANCELLATION POLICY:
-          ✅ Free cancellation up to 24 hours before your rental date
-          ⚠️ Cancellations within 24 hours may not be eligible for refund
+          Free cancellation up to 24 hours before your rental date
+          Cancellations within 24 hours may not be eligible for refund
 
           NEED HELP?
-          📧 support@dalscooter.com
-          📞 1-800-DAL-SCOOT
-          💬 Use our in-app messaging for quick support
+          support@dalscooter.com
+          1-800-DAL-SCOOT
+          Use our in-app messaging for quick support
 
           Thank you for choosing DALScooter!
           © 2025 DALScooter
@@ -765,15 +765,15 @@ Resources:
                       formatted_date = booking_date
                   
                   if refund_eligible:
-                      cancellation_status = "✅ CANCELLED - Full Refund Eligible"
+                      cancellation_status = "CANCELLED - Full Refund Eligible"
                       refund_info = """
-          💰 REFUND INFORMATION:
+          REFUND INFORMATION:
           Status: Full refund eligible
           Processing: 3-5 business days
           Method: Original payment method
           """
                   else:
-                      cancellation_status = "❌ CANCELLATION PROCESSED - No Refund"
+                      cancellation_status = "CANCELLATION PROCESSED - No Refund"
                       refund_info = """
           💰 REFUND INFORMATION:
           Status: Not eligible for refund (less than 24 hours notice)
@@ -781,7 +781,7 @@ Resources:
           Policy: Contact support for special circumstances
           """
                   
-                  subject = f"🛴 DALScooter - Booking Cancelled ({booking_id})"
+                  subject = f"DALScooter - Booking Cancelled ({booking_id})"
                   
                   message = f"""
           {cancellation_status}
@@ -800,14 +800,14 @@ Resources:
           {refund_info}
 
           BOOK AGAIN:
-          🛴 Ready for another ride? Check our availability
-          📱 Browse scooters in the DALScooter app
-          💡 Remember: Book early for the best rates!
+          Ready for another ride? Check our availability
+          Browse scooters in the DALScooter app
+          Remember: Book early for the best rates!
 
           NEED ASSISTANCE?
-          📧 support@dalscooter.com
-          📞 1-800-DAL-SCOOT
-          💬 Contact us through the app for immediate help
+          support@dalscooter.com
+          1-800-DAL-SCOOT
+          Contact us through the app for immediate help
 
           We hope to serve you again soon!
           © 2025 DALScooter
