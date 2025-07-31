@@ -1,4 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
+
 Description: 'DALScooter Backend APIs - Simplified with Real-time Inventory & Automatic Booking'
 
 Parameters:
@@ -247,6 +248,7 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
+  # REAL-TIME INVENTORY TABLE
   BikeInventoryTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -358,7 +360,7 @@ Resources:
                   bikes_table = dynamodb.Table(os.environ['BIKES_TABLE'])
                   inventory_table = dynamodb.Table(os.environ['BIKE_INVENTORY_TABLE'])
                   
-                  # Query bikes
+                  # Query active bikes
                   if bike_type:
                       bikes_response = bikes_table.query(
                           IndexName='BikeTypeIndex',
@@ -375,7 +377,7 @@ Resources:
                   
                   result = []
                   for bike in bikes_response['Items']:
-                      # Get availability
+                      # Get real-time availability
                       inventory_response = inventory_table.get_item(
                           Key={
                               'bike_id': bike['bike_id'],
@@ -414,7 +416,7 @@ Resources:
                   if not bike_id:
                       return response_with_cors(400, {'error': 'bike_id is required'})
                   
-                  # Check if bike available
+                  # Check if bike exists
                   bikes_table = dynamodb.Table(os.environ['BIKES_TABLE'])
                   bike_response = bikes_table.get_item(Key={'bike_id': bike_id})
                   
@@ -476,7 +478,7 @@ Resources:
                   'body': json.dumps(body, default=str)
               }
 
-  # API function for Authenticated Operations
+  # Main API function for Authenticated Operations
   UnifiedAPIFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -533,6 +535,9 @@ Resources:
                           return create_booking(event, user_id)
                       elif path == '/bookings' and http_method == 'GET':
                           return get_customer_bookings(user_id)
+                      elif '/bookings/' in path and path.endswith('/messages') and http_method == 'GET':
+                          booking_id = path_params.get('booking_id')
+                          return get_booking_messages(booking_id, user_id, user_type)
                       elif '/bookings/' in path and http_method == 'DELETE':
                           booking_id = path_params.get('booking_id')
                           return cancel_booking(booking_id, user_id)
@@ -543,9 +548,6 @@ Resources:
                           return submit_feedback(event, bike_id, user_id)
                       elif path == '/messages' and http_method == 'POST':
                           return send_message(event, user_id, user_type)
-                      elif '/bookings/' in path and path.endswith('/messages') and http_method == 'GET':
-                          booking_id = path_params.get('booking_id')
-                          return get_booking_messages(booking_id, user_id)
                       elif path == '/messages/conversations' and http_method == 'GET':
                           return get_customer_conversations(user_id)
                   
@@ -561,6 +563,9 @@ Resources:
                           return delete_bike(bike_id, user_id)
                       elif path == '/franchise/bookings' and http_method == 'GET':
                           return get_franchise_bookings(user_id, event.get('queryStringParameters', {}))
+                      elif '/franchise/bookings/' in path and path.endswith('/messages') and http_method == 'GET':
+                          booking_id = path_params.get('booking_id')
+                          return get_booking_messages(booking_id, user_id, user_type)
                       elif path == '/franchise/customers' and http_method == 'GET':
                           return get_franchise_customers(user_id)
                       elif path == '/franchise/dashboard' and http_method == 'GET':
@@ -1373,12 +1378,12 @@ Resources:
                   print(f"Error sending message: {str(e)}")
                   return response_with_cors(500, {'error': 'Message sending failed'})
           
-          def get_booking_messages(booking_id, customer_id):
+          def get_booking_messages(booking_id, user_id, user_type):
               try:
                   if not booking_id:
                       return response_with_cors(400, {'error': 'booking_id is required'})
                   
-                  # Verify booking exists and belongs to customer
+                  # Verify booking exists and user has access
                   bookings_table = dynamodb.Table(os.environ['BOOKINGS_TABLE'])
                   booking_response = bookings_table.get_item(Key={'booking_id': booking_id})
                   
@@ -1386,14 +1391,23 @@ Resources:
                       return response_with_cors(404, {'error': 'Booking not found'})
                   
                   booking = booking_response['Item']
-                  if booking['customer_id'] != customer_id:
-                      return response_with_cors(403, {'error': 'Cannot view messages for booking not owned by you'})
                   
+                  # Verify access based on user type
+                  if user_type == 'customer':
+                      if booking['customer_id'] != user_id:
+                          return response_with_cors(403, {'error': 'Cannot view messages for booking not owned by you'})
+                  elif user_type == 'franchise':
+                      if booking.get('franchise_id') != user_id:
+                          return response_with_cors(403, {'error': 'Access denied'})
+                  else:
+                      return response_with_cors(403, {'error': 'Invalid user type'})
+                  
+                  # Get messages for this booking
                   messages_table = dynamodb.Table(os.environ['MESSAGES_TABLE'])
                   messages_response = messages_table.query(
                       IndexName='BookingMessages',
                       KeyConditionExpression=Key('booking_id').eq(booking_id),
-                      ScanIndexForward=True
+                      ScanIndexForward=True  # Oldest messages first
                   )
                   
                   messages = []
@@ -1405,8 +1419,27 @@ Resources:
                           'createdAt': item['createdAt']
                       })
                   
+                  # Get additional booking info for context
+                  users_table = dynamodb.Table(os.environ['USERS_TABLE'])
+                  customer_response = users_table.get_item(Key={'userId': booking['customer_id']})
+                  customer_info = customer_response.get('Item', {})
+                  
+                  bikes_table = dynamodb.Table(os.environ['BIKES_TABLE'])
+                  bike_response = bikes_table.get_item(Key={'bike_id': booking['bike_id']})
+                  bike_info = bike_response.get('Item', {})
+                  
                   return response_with_cors(200, {
                       'booking_id': booking_id,
+                      'booking_info': {
+                          'customer_id': booking['customer_id'],
+                          'customer_email': customer_info.get('email', 'N/A'),
+                          'bike_id': booking['bike_id'],
+                          'bike_type': bike_info.get('type', 'N/A'),
+                          'date': booking['date'],
+                          'status': booking['status'],
+                          'dailyRate': float(booking.get('dailyRate', 0)),
+                          'createdAt': booking['createdAt']
+                      },
                       'messages': messages,
                       'totalMessages': len(messages)
                   })
@@ -1658,7 +1691,7 @@ Resources:
           import os
           from datetime import datetime, date
           
-          dynamodb = dynamodb.resource('dynamodb')
+          dynamodb = boto3.resource('dynamodb')
           sns = boto3.client('sns')
           
           def lambda_handler(event, context):
@@ -1829,6 +1862,22 @@ Resources:
       ParentId: !Ref FranchiseResource
       PathPart: 'bookings'
 
+  # NEW: Franchise Booking ID Resource for accessing specific booking conversations
+  FranchiseBookingIdResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ParentId: !Ref FranchiseBookingsResource
+      PathPart: '{booking_id}'
+
+  # NEW: Franchise Booking Messages Resource  
+  FranchiseBookingMessagesResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ParentId: !Ref FranchiseBookingIdResource
+      PathPart: 'messages'
+
   FranchiseCustomersResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -1962,6 +2011,7 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
 
+  # Customer: Get full conversation for a booking
   BookingMessagesGetMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -2042,6 +2092,22 @@ Resources:
       HttpMethod: GET
       AuthorizationType: COGNITO_USER_POOLS
       AuthorizerId: !Ref CognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
+
+  # NEW: Franchise: Get full conversation for a booking by booking_id
+  FranchiseBookingMessagesGetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref FranchiseBookingMessagesResource
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref CognitoAuthorizer
+      RequestParameters:
+        method.request.path.booking_id: true
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
@@ -2128,6 +2194,10 @@ Outputs:
     Description: 'Customer Bookings API Endpoint (Auth Required)'
     Value: !Sub 'https://${APIGatewayId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/bookings'
 
+  CustomerBookingMessagesEndpoint:
+    Description: 'Customer Booking Messages API Endpoint (Auth Required)'
+    Value: !Sub 'https://${APIGatewayId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/bookings/{booking_id}/messages'
+
   CustomerProfileEndpoint:
     Description: 'Customer Profile API Endpoint (Auth Required)'
     Value: !Sub 'https://${APIGatewayId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/customers/profile'
@@ -2135,6 +2205,10 @@ Outputs:
   CustomerMessagesEndpoint:
     Description: 'Customer Messages API Endpoint (Auth Required)'
     Value: !Sub 'https://${APIGatewayId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/messages'
+
+  CustomerConversationsEndpoint:
+    Description: 'Customer Conversations List API Endpoint (Auth Required)'
+    Value: !Sub 'https://${APIGatewayId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/messages/conversations'
 
   # API Endpoints - Franchise (Auth Required)
   FranchiseBikesEndpoint:
@@ -2145,6 +2219,10 @@ Outputs:
     Description: 'Franchise Bookings Management Endpoint (Auth Required)'
     Value: !Sub 'https://${APIGatewayId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/franchise/bookings'
 
+  FranchiseBookingMessagesEndpoint:
+    Description: 'Franchise Booking Messages API Endpoint (Auth Required)'
+    Value: !Sub 'https://${APIGatewayId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/franchise/bookings/{booking_id}/messages'
+
   FranchiseCustomersEndpoint:
     Description: 'Franchise Customer Management Endpoint (Auth Required)'
     Value: !Sub 'https://${APIGatewayId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/franchise/customers'
@@ -2152,6 +2230,10 @@ Outputs:
   FranchiseDashboardEndpoint:
     Description: 'Franchise Dashboard API Endpoint (Auth Required)'
     Value: !Sub 'https://${APIGatewayId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/franchise/dashboard'
+
+  FranchiseConversationsEndpoint:
+    Description: 'Franchise Conversations List API Endpoint (Auth Required)'
+    Value: !Sub 'https://${APIGatewayId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/franchise/conversations'
 
   # Table Names
   BikesTableName:
