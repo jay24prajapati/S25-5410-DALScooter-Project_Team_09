@@ -1,106 +1,139 @@
 import React, { useEffect, useState } from 'react';
-import '../styles/CustomerDashboard.css';
+import axios from 'axios';
 
-
-const scooterPrices = {
-  ebike: 15,
-  gyroscooter: 20,
-  segway: 25,
-};
+const API_BASE = import.meta.env.VITE_API_BASE;
 
 export default function CustomerDashboard() {
-  const [currentUser, setCurrentUser] = useState({});
-  const [selectedScooterType, setSelectedScooterType] = useState('');
-  const [duration, setDuration] = useState('');
-  const [pickupLocation, setPickupLocation] = useState('');
-  const [specialRequests, setSpecialRequests] = useState('');
-  const [startTime, setStartTime] = useState('');
-  const [bookings, setBookings] = useState([]);
-  const [feedbacks, setFeedbacks] = useState([]);
-  const [bookingResult, setBookingResult] = useState('');
+  const [currentUser, setCurrentUser] = useState(null);
+  const [bikes, setBikes] = useState([]);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [loading, setLoading] = useState(false);
+
+  const token = localStorage.getItem('accessToken');
 
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const user = {
-      userId: urlParams.get('userId') || localStorage.getItem('dalscooter_userId'),
-      email: urlParams.get('email') || localStorage.getItem('dalscooter_email'),
-      userType: urlParams.get('userType') || localStorage.getItem('dalscooter_userType'),
-      sessionId: urlParams.get('sessionId') || localStorage.getItem('dalscooter_sessionId'),
-    };
-    if (!user.userId || !user.email) {
+    const email = localStorage.getItem('email');
+    const userType = localStorage.getItem('userType');
+    const sessionId = localStorage.getItem('sessionId');
+    const userId = localStorage.getItem('userId');
+    if (!userId || userType !== 'customer') {
       window.location.href = '/';
-    } else if (user.userType === 'franchise') {
-      window.location.href = `/franchise-dashboard?${urlParams.toString()}`;
     } else {
-      setCurrentUser(user);
+      setCurrentUser({ userId, email, userType, sessionId });
+      fetchAvailableBikes();
     }
-  }, []);
+  }, [selectedDate]);
 
-  const handleBooking = (e) => {
-    e.preventDefault();
-    if (!selectedScooterType || !pickupLocation || !duration || !startTime) {
-      alert('Fill all required fields.');
-      return;
+  const fetchAvailableBikes = async () => {
+    try {
+      setLoading(true);
+      const res = await axios.get(`${API_BASE}/bikes?date=${selectedDate}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      setBikes(res.data);
+    } catch (err) {
+      console.error('Error fetching bikes:', err);
+      alert('Failed to load bikes.');
+    } finally {
+      setLoading(false);
     }
-    const id = `DAL-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 5)}`.toUpperCase();
-    const booking = {
-      bookingId: id,
-      scooterType: selectedScooterType,
-      pickupLocation,
-      startTime,
-      duration,
-      specialRequests,
-    };
-    setBookings([...bookings, booking]);
-    setBookingResult(`Booking Confirmed! Booking ID: ${id}`);
   };
 
-  const handleScooterSelect = (type) => {
-    setSelectedScooterType(type);
-    setBookingResult('');
+  const handleBookBike = async (bikeId) => {
+    try {
+      await axios.post(
+        `${API_BASE}/bookings`,
+        { bike_id: bikeId, date: selectedDate },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      alert('Booking successful!');
+      fetchAvailableBikes();
+    } catch (err) {
+      console.error('Booking failed:', err);
+      alert('Booking failed.');
+    }
   };
 
-  const totalCost = selectedScooterType && duration ? scooterPrices[selectedScooterType] * parseInt(duration) : 0;
+  if (!currentUser) return null;
 
   return (
-    <div className="customer-dashboard">
-      <header className="dashboard-header">
-        <h1>DALScooter | Customer Dashboard</h1>
-        <div>Welcome, {currentUser.email}</div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100">
+      {/* Header */}
+      <header className="bg-white shadow p-5 flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-blue-800">DALScooter | Customer Dashboard</h1>
+        <div className="text-blue-600">Welcome, {currentUser.email}</div>
       </header>
 
-      <main className="dashboard-main">
-        <h2>Choose Your Scooter</h2>
-        <div className="scooter-types">
-          {['ebike', 'gyroscooter', 'segway'].map((type) => (
-            <div key={type}
-              className={`scooter-card ${selectedScooterType === type ? 'selected' : ''}`}
-              onClick={() => handleScooterSelect(type)}
-            >
-              <h3>{type.charAt(0).toUpperCase() + type.slice(1)}</h3>
-              <p>${scooterPrices[type]}/hour</p>
-            </div>
-          ))}
-        </div>
+      {/* Date Picker */}
+      <div className="p-4 flex items-center justify-center gap-4">
+        <label className="font-semibold text-blue-700">Select Date:</label>
+        <input
+          type="date"
+          value={selectedDate}
+          onChange={(e) => setSelectedDate(e.target.value)}
+          className="p-2 border border-blue-300 rounded"
+        />
+      </div>
 
-        {selectedScooterType && (
-          <form className="booking-form" onSubmit={handleBooking}>
-            <h3>Booking Form</h3>
-            <input value={pickupLocation} onChange={(e) => setPickupLocation(e.target.value)} placeholder="Pickup Location" />
-            <input type="datetime-local" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-            <select value={duration} onChange={(e) => setDuration(e.target.value)}>
-              <option value="">Select Duration</option>
-              {[1, 2, 3, 4, 6, 8].map((d) => (
-                <option key={d} value={d}>{d} hour{d > 1 ? 's' : ''}</option>
-              ))}
-            </select>
-            <textarea placeholder="Special Requests (optional)" value={specialRequests} onChange={(e) => setSpecialRequests(e.target.value)}></textarea>
-            <p>Total: ${totalCost.toFixed(2)}</p>
-            <button type="submit">Book Now</button>
-          </form>
+      {/* Bike Listing */}
+      <main className="p-6">
+        {loading ? (
+          <p className="text-center text-blue-600">Loading available bikes...</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {bikes.length === 0 ? (
+              <p className="text-center col-span-full text-gray-500">
+                No bikes available for selected date.
+              </p>
+            ) : (
+              bikes.map((bike) => (
+                <div
+                  key={bike.bike_id}
+                  className="bg-white rounded-xl shadow border border-blue-100 p-6 space-y-3"
+                >
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h4 className="text-lg font-bold text-gray-800">
+                        Scooter ID: {bike.bike_id.slice(0, 6)}...
+                      </h4>
+                      <p className="text-blue-600 font-semibold">{bike.type}</p>
+                    </div>
+                    <span className="font-semibold text-green-600">
+                      ${bike.dailyRate}/day
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Features:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {String(bike.features || '')
+                        .split(',')
+                        .map((f, idx) => (
+                          <span
+                            key={idx}
+                            className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full"
+                          >
+                            {f.trim()}
+                          </span>
+                        ))}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleBookBike(bike.bike_id)}
+                    className="w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-all"
+                  >
+                    Book This Bike
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
         )}
-
-        {bookingResult && <div className="result-box success">{bookingResult}</div>}
       </main>
     </div>
   );

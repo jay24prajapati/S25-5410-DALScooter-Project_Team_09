@@ -1902,6 +1902,292 @@ Resources:
   # API METHODS
 
   # Public Methods (No Authentication Required)
+    # CORS OPTIONS Method for /bikes/{bike_id}
+  
+  BikeIdOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref BikeIdResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # CORS OPTIONS Method for /bookings/{booking_id}
+  BookingIdOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref BookingIdResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # CORS OPTIONS Method for /messages
+  MessagesOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref MessagesResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  FeedbackOptionsMethod:
+  Type: AWS::ApiGateway::Method
+  Properties:
+    RestApiId: !Ref APIGatewayId
+    ResourceId: !Ref BikeFeedbackResource
+    HttpMethod: OPTIONS
+    AuthorizationType: NONE
+    Integration:
+      Type: MOCK
+      RequestTemplates:
+        application/json: '{"statusCode": 200}'
+      IntegrationResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+          ResponseTemplates:
+            application/json: '{}'
+    MethodResponses:
+      - StatusCode: 200
+        ResponseParameters:
+          method.response.header.Access-Control-Allow-Origin: true
+          method.response.header.Access-Control-Allow-Methods: true
+          method.response.header.Access-Control-Allow-Headers: true
+
+  FranchiseBookingsOptionsMethod:
+  Type: AWS::ApiGateway::Method
+  Properties:
+    RestApiId: !Ref APIGatewayId
+    ResourceId: !Ref FranchiseBookingsResource
+    HttpMethod: OPTIONS
+    AuthorizationType: NONE
+    Integration:
+      Type: MOCK
+      RequestTemplates:
+        application/json: '{"statusCode": 200}'
+      IntegrationResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+          ResponseTemplates:
+            application/json: '{}'
+    MethodResponses:
+      - StatusCode: 200
+        ResponseParameters:
+          method.response.header.Access-Control-Allow-Origin: true
+          method.response.header.Access-Control-Allow-Methods: true
+          method.response.header.Access-Control-Allow-Headers: true
+  
+  FranchiseBookingMessagesOptionsMethod:
+  Type: AWS::ApiGateway::Method
+  Properties:
+    RestApiId: !Ref APIGatewayId
+    ResourceId: !Ref FranchiseBookingMessagesResource
+    HttpMethod: OPTIONS
+    AuthorizationType: NONE
+    Integration:
+      Type: MOCK
+      RequestTemplates:
+        application/json: '{"statusCode": 200}'
+      IntegrationResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+          ResponseTemplates:
+            application/json: '{}'
+    MethodResponses:
+      - StatusCode: 200
+        ResponseParameters:
+          method.response.header.Access-Control-Allow-Origin: true
+          method.response.header.Access-Control-Allow-Methods: true
+          method.response.header.Access-Control-Allow-Headers: true
+
+  CustomerProfileOptionsMethod:
+  Type: AWS::ApiGateway::Method
+  Properties:
+    RestApiId: !Ref APIGatewayId
+    ResourceId: !Ref CustomerProfileResource
+    HttpMethod: OPTIONS
+    AuthorizationType: NONE
+    Integration:
+      Type: MOCK
+      RequestTemplates:
+        application/json: '{"statusCode": 200}'
+      IntegrationResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+          ResponseTemplates:
+            application/json: '{}'
+    MethodResponses:
+      - StatusCode: 200
+        ResponseParameters:
+          method.response.header.Access-Control-Allow-Origin: true
+          method.response.header.Access-Control-Allow-Methods: true
+          method.response.header.Access-Control-Allow-Headers: true
+  FranchiseCustomersOptionsMethod:
+  Type: AWS::ApiGateway::Method
+  Properties:
+    RestApiId: !Ref APIGatewayId
+    ResourceId: !Ref FranchiseCustomersResource
+    HttpMethod: OPTIONS
+    AuthorizationType: NONE
+    Integration:
+      Type: MOCK
+      RequestTemplates:
+        application/json: '{"statusCode": 200}'
+      IntegrationResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+          ResponseTemplates:
+            application/json: '{}'
+    MethodResponses:
+      - StatusCode: 200
+        ResponseParameters:
+          method.response.header.Access-Control-Allow-Origin: true
+          method.response.header.Access-Control-Allow-Methods: true
+          method.response.header.Access-Control-Allow-Headers: true
+  FranchiseDashboardOptionsMethod:
+  Type: AWS::ApiGateway::Method
+  Properties:
+    RestApiId: !Ref APIGatewayId
+    ResourceId: !Ref FranchiseDashboardResource
+    HttpMethod: OPTIONS
+    AuthorizationType: NONE
+    Integration:
+      Type: MOCK
+      RequestTemplates:
+        application/json: '{"statusCode": 200}'
+      IntegrationResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+          ResponseTemplates:
+            application/json: '{}'
+    MethodResponses:
+      - StatusCode: 200
+        ResponseParameters:
+          method.response.header.Access-Control-Allow-Origin: true
+          method.response.header.Access-Control-Allow-Methods: true
+          method.response.header.Access-Control-Allow-Headers: true
+  FranchiseConversationsOptionsMethod:
+  Type: AWS::ApiGateway::Method
+  Properties:
+    RestApiId: !Ref APIGatewayId
+    ResourceId: !Ref FranchiseConversationsResource
+    HttpMethod: OPTIONS
+    AuthorizationType: NONE
+    Integration:
+      Type: MOCK
+      RequestTemplates:
+        application/json: '{"statusCode": 200}'
+      IntegrationResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+          ResponseTemplates:
+            application/json: '{}'
+    MethodResponses:
+      - StatusCode: 200
+        ResponseParameters:
+          method.response.header.Access-Control-Allow-Origin: true
+          method.response.header.Access-Control-Allow-Methods: true
+          method.response.header.Access-Control-Allow-Headers: true
+  MessageConversationsOptionsMethod:
+  Type: AWS::ApiGateway::Method
+  Properties:
+    RestApiId: !Ref APIGatewayId
+    ResourceId: !Ref MessageConversationsResource
+    HttpMethod: OPTIONS
+    AuthorizationType: NONE
+    Integration:
+      Type: MOCK
+      RequestTemplates:
+        application/json: '{"statusCode": 200}'
+      IntegrationResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+          ResponseTemplates:
+            application/json: '{}'
+    MethodResponses:
+      - StatusCode: 200
+        ResponseParameters:
+          method.response.header.Access-Control-Allow-Origin: true
+          method.response.header.Access-Control-Allow-Methods: true
+          method.response.header.Access-Control-Allow-Headers: true
+
   BikesGetMethod:
     Type: AWS::ApiGateway::Method
     Properties:
