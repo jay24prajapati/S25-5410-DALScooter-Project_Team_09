@@ -3,6 +3,9 @@ import OverviewSection from '../components/Franchise/OverviewSection';
 import BikeManagementSection from '../components/Franchise/BikeManagementSection';
 import BookingSection from '../components/Franchise/BookingSection';
 import SupportSection from '../components/Franchise/SupportSection';
+import CustomerList from '../components/Franchise/CustomerList';
+import ConversationList from '../components/Franchise/ConversationList';
+import ChatModal from '../components/Franchise/ChatModal';
 
 export default function FranchiseDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -26,6 +29,7 @@ export default function FranchiseDashboard() {
   const [showAddBike, setShowAddBike] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
+  const [selectedBookingId, setSelectedBookingId] = useState(null); // for chat modal
 
   const [newBike, setNewBike] = useState({
     type: 'eBike',
@@ -71,11 +75,13 @@ export default function FranchiseDashboard() {
     { id: 'overview', name: 'Overview', icon: '📊' },
     { id: 'bikes', name: 'Bike Management', icon: '🚲' },
     { id: 'bookings', name: 'Bookings', icon: '📅' },
-    { id: 'support', name: 'Support', icon: '💬' }
+    { id: 'support', name: 'Support', icon: '🛠️' },
+    { id: 'messages', name: 'Customers & Messages', icon: '💬' }
   ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      {/* Header */}
       <div className="bg-white shadow-lg border-b border-blue-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
@@ -102,6 +108,7 @@ export default function FranchiseDashboard() {
         </div>
       </div>
 
+      {/* Tabs */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
         <div className="flex space-x-4 mb-8">
           {tabs.map(tab => (
@@ -120,6 +127,7 @@ export default function FranchiseDashboard() {
           ))}
         </div>
 
+        {/* Content */}
         <div className="mb-16">
           {activeTab === 'overview' && (
             <OverviewSection bikes={bikes} bookings={bookings} tickets={tickets} />
@@ -151,6 +159,15 @@ export default function FranchiseDashboard() {
               showChat={showChat}
               setShowChat={setShowChat}
             />
+          )}
+          {activeTab === 'messages' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <CustomerList />
+              <ConversationList onOpenChat={(bookingId) => setSelectedBookingId(bookingId)} />
+            </div>
+          )}
+          {selectedBookingId && (
+            <ChatModal bookingId={selectedBookingId} onClose={() => setSelectedBookingId(null)} />
           )}
         </div>
       </div>

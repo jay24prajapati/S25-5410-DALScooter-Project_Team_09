@@ -1,6 +1,42 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 
-export default function OverviewSection({ bikes, bookings, tickets }) {
+const API_BASE = import.meta.env.VITE_API_BASE;
+
+export default function OverviewSection({ bookings, tickets }) {
+  const [totalCount, setTotalCount] = useState(0);
+  const [availableCount, setAvailableCount] = useState(0);
+  const [activeBookings, setActiveBookings] = useState(0);
+  const [openTickets, setOpenTickets] = useState(0);
+
+  const franchiseId = localStorage.getItem('franchise_id'); // Or get from auth context
+
+  useEffect(() => {
+    const fetchDashboardStats = async () => {
+      try {
+        const res = await axios.post(`${API_BASE}/franchise/dashboard`, {
+          franchise_id: franchiseId,
+        });
+
+        const bikeStats = res.data.bikeStatistics || {};
+        const bookingStats = res.data.bookingStatistics || {};
+
+        setTotalCount(bikeStats.totalBikeCount || 0);
+        setAvailableCount(bikeStats.activeBikes || 0);
+
+        setActiveBookings(bookingStats.statusBreakdown?.CONFIRMED || 0);
+      } catch (err) {
+        console.error('Failed to fetch dashboard stats:', err);
+      }
+    };
+
+    fetchDashboardStats();
+  }, [franchiseId]);
+
+  useEffect(() => {
+    setOpenTickets(tickets.filter((t) => t.status === 'Open').length);
+  }, [tickets]);
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -9,7 +45,7 @@ export default function OverviewSection({ bikes, bookings, tickets }) {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-blue-100 text-sm">Total Bikes</p>
-              <p className="text-3xl font-bold">{bikes.length}</p>
+              <p className="text-3xl font-bold">{totalCount}</p>
             </div>
             <svg className="w-12 h-12 text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -22,7 +58,7 @@ export default function OverviewSection({ bikes, bookings, tickets }) {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-green-100 text-sm">Available</p>
-              <p className="text-3xl font-bold">{bikes.filter(b => b.status === 'Available').length}</p>
+              <p className="text-3xl font-bold">{availableCount}</p>
             </div>
             <svg className="w-12 h-12 text-green-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -35,7 +71,7 @@ export default function OverviewSection({ bikes, bookings, tickets }) {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-orange-100 text-sm">Active Bookings</p>
-              <p className="text-3xl font-bold">{bookings.filter(b => b.status === 'Active').length}</p>
+              <p className="text-3xl font-bold">{activeBookings}</p>
             </div>
             <svg className="w-12 h-12 text-orange-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -48,7 +84,7 @@ export default function OverviewSection({ bikes, bookings, tickets }) {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-red-100 text-sm">Open Tickets</p>
-              <p className="text-3xl font-bold">{tickets.filter(t => t.status === 'Open').length}</p>
+              <p className="text-3xl font-bold">{openTickets}</p>
             </div>
             <svg className="w-12 h-12 text-red-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.728-.833-2.498 0L4.316 15.5c-.77.833.192 2.5 1.732 2.5z" />
@@ -57,6 +93,7 @@ export default function OverviewSection({ bikes, bookings, tickets }) {
         </div>
       </div>
 
+      {/* Static Recent Activity */}
       <div className="bg-white rounded-xl shadow-lg p-6 border border-blue-100">
         <h3 className="text-xl font-bold text-blue-800 mb-4">Recent Activity</h3>
         <div className="space-y-3">
