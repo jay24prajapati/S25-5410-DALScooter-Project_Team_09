@@ -1,3 +1,5 @@
+// Updated CustomerDashboard.jsx with proper token handling
+
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import CustomerProfile from '../components/Customer/CustomerProfile';
@@ -17,15 +19,31 @@ export default function CustomerDashboard() {
   const [selectedBookingId, setSelectedBookingId] = useState('');
   const [selectedBikeId, setSelectedBikeId] = useState('');
 
-  const token = localStorage.getItem('accessToken');
+  // Get the correct token for API calls
+  const getAuthToken = () => {
+    // Try idToken first (preferred for API Gateway Cognito authorizers)
+    return localStorage.getItem('idToken') ||
+        localStorage.getItem('accessToken') ||
+        localStorage.getItem('token');
+  };
 
   useEffect(() => {
+    // Debug tokens
+    console.log('=== TOKEN DEBUG ===');
+    console.log('accessToken exists:', !!localStorage.getItem('accessToken'));
+    console.log('idToken exists:', !!localStorage.getItem('idToken'));
+    console.log('refreshToken exists:', !!localStorage.getItem('refreshToken'));
+    console.log('userId:', localStorage.getItem('userId'));
+    console.log('userType:', localStorage.getItem('userType'));
+    console.log('==================');
+
     const email = localStorage.getItem('email');
     const userType = localStorage.getItem('userType');
     const sessionId = localStorage.getItem('sessionId');
     const userId = localStorage.getItem('userId');
 
     if (!userId || userType !== 'customer') {
+      console.log('Invalid user credentials, redirecting...');
       window.location.href = '/';
     } else {
       setCurrentUser({ userId, email, userType, sessionId });
@@ -36,10 +54,12 @@ export default function CustomerDashboard() {
   const fetchAvailableBikes = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API_BASE}/bikes?date=${selectedDate}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+
+      // For public endpoints, no auth needed
+      const res = await axios.get(`${API_BASE}/bikes?date=${selectedDate}`);
       setBikes(res.data);
+      console.log('Bikes loaded successfully:', res.data.length);
+
     } catch (err) {
       console.error('Error fetching bikes:', err);
       toast.error('Failed to load bikes.');
@@ -50,159 +70,223 @@ export default function CustomerDashboard() {
 
   const handleBookBike = async (bikeId) => {
     try {
-      await axios.post(
-        `${API_BASE}/bookings`,
-        { bike_id: bikeId, date: selectedDate },
-        { headers: { Authorization: `Bearer ${token}` } }
+      const token = getAuthToken();
+
+      if (!token) {
+        toast.error('No authentication token found. Please login again.');
+        localStorage.clear();
+        window.location.href = '/login';
+        return;
+      }
+
+      console.log('Attempting to book bike:', bikeId);
+      console.log('Using token:', token.substring(0, 20) + '...');
+
+      const response = await axios.post(
+          `${API_BASE}/bookings`,
+          {
+            bike_id: bikeId,
+            date: selectedDate
+          },
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          }
       );
+
+      console.log('Booking response:', response.data);
       toast.success('Booking successful!');
-      fetchAvailableBikes();
+      fetchAvailableBikes(); // Refresh bikes
+
     } catch (err) {
       console.error('Booking failed:', err);
-      toast.error('Booking failed.');
+      console.error('Error response:', err.response?.data);
+      console.error('Error status:', err.response?.status);
+
+      if (err.response?.status === 401) {
+        toast.error('Authentication failed. Please login again.');
+        localStorage.clear();
+        window.location.href = '/login';
+      } else if (err.response?.status === 403) {
+        toast.error('Access denied. Please check your permissions.');
+      } else {
+        const errorMessage = err.response?.data?.error ||
+            err.response?.data?.message ||
+            'Booking failed. Please try again.';
+        toast.error(errorMessage);
+      }
     }
   };
 
-  if (!currentUser) return null;
+  if (!currentUser) {
+    return <div className="text-center p-4">Loading...</div>;
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100">
-      {/* Top Bar */}
-      <header className="bg-white shadow p-5 flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-blue-800">DALScooter | Customer Dashboard</h1>
-        <div className="text-blue-600">Welcome, {currentUser.email}</div>
-      </header>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100">
+        {/* Top Bar */}
+        <header className="bg-white shadow p-5 flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-blue-800">DALScooter | Customer Dashboard</h1>
+          <div className="flex items-center gap-4">
+            <div className="text-blue-600">Welcome, {currentUser.email}</div>
+            <button
+                onClick={() => {
+                  localStorage.clear();
+                  window.location.href = '/';
+                }}
+                className="text-red-600 hover:text-red-800 text-sm underline"
+            >
+              Logout
+            </button>
+          </div>
+        </header>
 
-      {/* Navigation Tabs */}
-      <nav className="bg-blue-100 px-4 py-3 flex gap-4 justify-center">
-        {[
-          { key: 'booking', label: 'Book Bike' },
-          { key: 'myBookings', label: 'My Bookings' },
-          { key: 'messages', label: 'Messages' },
-          { key: 'feedback', label: 'Submit Feedback' },
-          { key: 'profile', label: 'Profile' },
-        ].map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-2 font-semibold rounded ${
-              activeTab === tab.key
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-blue-800 border border-blue-300'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </nav>
+        {/* Navigation Tabs */}
+        <nav className="bg-blue-100 px-4 py-3 flex gap-4 justify-center">
+          {[
+            { key: 'booking', label: 'Book Bike' },
+            { key: 'myBookings', label: 'My Bookings' },
+            { key: 'messages', label: 'Messages' },
+            { key: 'feedback', label: 'Submit Feedback' },
+            { key: 'profile', label: 'Profile' },
+          ].map(tab => (
+              <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`px-4 py-2 font-semibold rounded ${
+                      activeTab === tab.key
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-blue-800 border border-blue-300'
+                  }`}
+              >
+                {tab.label}
+              </button>
+          ))}
+        </nav>
 
-      {/* Main Content */}
-      <main className="p-6">
-        {activeTab === 'booking' && (
-          <>
-            <div className="p-4 flex items-center justify-center gap-4">
-              <label className="font-semibold text-blue-700">Select Date:</label>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="p-2 border border-blue-300 rounded"
-              />
-            </div>
+        {/* Main Content */}
+        <main className="p-6">
+          {activeTab === 'booking' && (
+              <>
+                <div className="p-4 flex items-center justify-center gap-4">
+                  <label className="font-semibold text-blue-700">Select Date:</label>
+                  <input
+                      type="date"
+                      value={selectedDate}
+                      min={new Date().toISOString().split('T')[0]} // Prevent past dates
+                      onChange={(e) => setSelectedDate(e.target.value)}
+                      className="p-2 border border-blue-300 rounded"
+                  />
+                </div>
 
-            {loading ? (
-              <p className="text-center text-blue-600">Loading available bikes...</p>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {bikes.length === 0 ? (
-                  <p className="text-center col-span-full text-gray-500">
-                    No bikes available for selected date.
-                  </p>
+                {loading ? (
+                    <p className="text-center text-blue-600">Loading available bikes...</p>
                 ) : (
-                  bikes.map((bike) => (
-                    <div
-                      key={bike.bike_id}
-                      className="bg-white rounded-xl shadow border border-blue-100 p-6 space-y-3"
-                    >
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <h4 className="text-lg font-bold text-gray-800">
-                            Scooter ID: {bike.bike_id.slice(0, 6)}...
-                          </h4>
-                          <p className="text-blue-600 font-semibold">{bike.type}</p>
-                        </div>
-                        <span className="font-semibold text-green-600">
-                          ${bike.dailyRate}/day
-                        </span>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600 mb-1">Features:</p>
-                        <div className="flex flex-wrap gap-2">
-                          {String(bike.features || '')
-                            .split(',')
-                            .map((f, idx) => (
-                              <span
-                                key={idx}
-                                className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full"
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                      {bikes.length === 0 ? (
+                          <p className="text-center col-span-full text-gray-500">
+                            No bikes available for selected date.
+                          </p>
+                      ) : (
+                          bikes.map((bike) => (
+                              <div
+                                  key={bike.bike_id}
+                                  className="bg-white rounded-xl shadow border border-blue-100 p-6 space-y-3"
                               >
-                                {f.trim()}
-                              </span>
-                            ))}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleBookBike(bike.bike_id)}
-                        className="w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-all"
-                      >
-                        Book This Bike
-                      </button>
+                                <div className="flex justify-between items-center">
+                                  <div>
+                                    <h4 className="text-lg font-bold text-gray-800">
+                                      {bike.type}
+                                    </h4>
+                                    <p className="text-sm text-gray-500">ID: {bike.bike_id.slice(0, 8)}...</p>
+                                  </div>
+                                  <div className="text-right">
+                          <span className="font-semibold text-green-600">
+                            ${bike.dailyRate}/day
+                          </span>
+                                    <p className="text-xs text-gray-500">
+                                      {bike.availableCount}/{bike.totalCount} available
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <p className="text-sm text-gray-600 mb-1">Features:</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {(typeof bike.features === 'string'
+                                            ? bike.features.split(',')
+                                            : Object.values(bike.features || {})
+                                    ).map((feature, idx) => (
+                                        <span
+                                            key={idx}
+                                            className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full"
+                                        >
+                              {feature.trim()}
+                            </span>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                <button
+                                    onClick={() => handleBookBike(bike.bike_id)}
+                                    disabled={!bike.available || bike.availableCount <= 0}
+                                    className={`w-full mt-3 font-semibold py-2 px-4 rounded-lg transition-all ${
+                                        bike.available && bike.availableCount > 0
+                                            ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                    }`}
+                                >
+                                  {bike.available && bike.availableCount > 0 ? 'Book This Bike' : 'Unavailable'}
+                                </button>
+                              </div>
+                          ))
+                      )}
                     </div>
-                  ))
+                )}
+              </>
+          )}
+
+          {activeTab === 'myBookings' && <MyBookings token={getAuthToken()} />}
+
+          {activeTab === 'messages' && (
+              <div className="max-w-xl mx-auto">
+                <input
+                    type="text"
+                    placeholder="Enter booking ID"
+                    value={selectedBookingId}
+                    onChange={(e) => setSelectedBookingId(e.target.value)}
+                    className="mb-4 p-2 w-full border rounded"
+                />
+                {selectedBookingId && <BookingMessages bookingId={selectedBookingId} />}
+              </div>
+          )}
+
+          {activeTab === 'feedback' && (
+              <div className="max-w-xl mx-auto">
+                <input
+                    type="text"
+                    placeholder="Booking ID"
+                    value={selectedBookingId}
+                    onChange={(e) => setSelectedBookingId(e.target.value)}
+                    className="mb-2 p-2 w-full border rounded"
+                />
+                <input
+                    type="text"
+                    placeholder="Bike ID"
+                    value={selectedBikeId}
+                    onChange={(e) => setSelectedBikeId(e.target.value)}
+                    className="mb-4 p-2 w-full border rounded"
+                />
+                {selectedBookingId && selectedBikeId && (
+                    <SubmitFeedback bookingId={selectedBookingId} bikeId={selectedBikeId} />
                 )}
               </div>
-            )}
-          </>
-        )}
+          )}
 
-        {activeTab === 'myBookings' && <MyBookings token={token} />}
-
-        {activeTab === 'messages' && (
-          <div className="max-w-xl mx-auto">
-            <input
-              type="text"
-              placeholder="Enter booking ID"
-              value={selectedBookingId}
-              onChange={(e) => setSelectedBookingId(e.target.value)}
-              className="mb-4 p-2 w-full border rounded"
-            />
-            {selectedBookingId && <BookingMessages bookingId={selectedBookingId} />}
-          </div>
-        )}
-
-        {activeTab === 'feedback' && (
-          <div className="max-w-xl mx-auto">
-            <input
-              type="text"
-              placeholder="Booking ID"
-              value={selectedBookingId}
-              onChange={(e) => setSelectedBookingId(e.target.value)}
-              className="mb-2 p-2 w-full border rounded"
-            />
-            <input
-              type="text"
-              placeholder="Bike ID"
-              value={selectedBikeId}
-              onChange={(e) => setSelectedBikeId(e.target.value)}
-              className="mb-4 p-2 w-full border rounded"
-            />
-            {selectedBookingId && selectedBikeId && (
-              <SubmitFeedback bookingId={selectedBookingId} bikeId={selectedBikeId} />
-            )}
-          </div>
-        )}
-
-        {activeTab === 'profile' && <CustomerProfile />}
-      </main>
-    </div>
+          {activeTab === 'profile' && <CustomerProfile />}
+        </main>
+      </div>
   );
 }

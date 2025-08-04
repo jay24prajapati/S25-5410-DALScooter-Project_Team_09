@@ -59,45 +59,55 @@ export default function LoginPage() {
     }
   };
 
- const handleStep3 = async (e) => {
-  e.preventDefault();
-  try {
-    const res = await axios.post(`${API_BASE}/auth/login`, {
-      step: 3,
-      sessionId,
-      userId,
-      caesarAnswer: decodedWord,
-    });
+  const handleStep3 = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await axios.post(`${API_BASE}/auth/login`, {
+        step: 3,
+        sessionId,
+        userId,
+        caesarAnswer: decodedWord,
+      });
 
-    const data = res.data;
-    const userType = data.userType?.toLowerCase(); // Normalize
+      const data = res.data;
+      const userType = data.userType?.toLowerCase(); // Normalize
 
-    // Save tokens and session
-    setAccessToken(data.accessToken);
-    localStorage.setItem('accessToken', data.accessToken);
-    localStorage.setItem('userId', userId);
-    localStorage.setItem('sessionId', sessionId);
-    localStorage.setItem('email', email);
-    localStorage.setItem('userType', userType);
+      console.log('Login success! Received tokens:', {
+        hasAccessToken: !!data.accessToken,
+        hasIdToken: !!data.idToken,
+        hasRefreshToken: !!data.refreshToken,
+        userType: userType
+      });
 
-    toast.success('Login successful!');
-    console.log('User Type from backend:', userType); 
+      // Store ALL tokens from the response
+      if (data.accessToken) localStorage.setItem('accessToken', data.accessToken);
+      if (data.idToken) localStorage.setItem('idToken', data.idToken);
+      if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
 
-    // Safe redirect based on role
-   if (userType === 'franchise') {
-      window.location.href = '/franchise-dashboard';
-  } else if (userType === 'customer') {
-  window.location.href = '/customer-dashboard'; 
-} else {
-  window.location.href = '/';
-}
-  } catch (err) {
-    const message =
-      err?.response?.data?.message ||
-      (err?.response?.status === 401 ? 'Incorrect Caesar cipher solution' : 'Something went wrong in Step 3');
-    toast.error(`Step 3 failed: ${message}`);
-  }
-};
+      // Store user information
+      localStorage.setItem('userId', userId);
+      localStorage.setItem('sessionId', sessionId);
+      localStorage.setItem('email', email);
+      localStorage.setItem('userType', userType);
+
+      toast.success('Login successful!');
+
+      // Safe redirect based on role
+      if (userType === 'franchise') {
+        window.location.href = '/franchise-dashboard';
+      } else if (userType === 'customer') {
+        window.location.href = '/customer-dashboard';
+      } else {
+        window.location.href = '/';
+      }
+    } catch (err) {
+      console.error('Step 3 error:', err);
+      const message =
+          err?.response?.data?.message ||
+          (err?.response?.status === 401 ? 'Incorrect Caesar cipher solution' : 'Something went wrong in Step 3');
+      toast.error(`Step 3 failed: ${message}`);
+    }
+  };
 
 
 
