@@ -110,7 +110,6 @@ export default function LoginPage() {
   };
 
 
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-blue-100 to-blue-200 flex items-center justify-center px-4 py-8">
       <div className="bg-white p-10 rounded-3xl shadow-2xl w-full max-w-lg border border-blue-200 relative overflow-hidden">
