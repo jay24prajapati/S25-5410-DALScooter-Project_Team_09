@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import { Eye, EyeOff } from 'lucide-react';
 import 'react-toastify/dist/ReactToastify.css';
 
 export default function LoginPage() {
@@ -14,6 +15,7 @@ export default function LoginPage() {
   const [securityQuestion, setSecurityQuestion] = useState('');
   const [caesarChallenge, setCaesarChallenge] = useState('');
   const [accessToken, setAccessToken] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const API_BASE = import.meta.env.VITE_API_BASE;
 
@@ -174,20 +176,27 @@ export default function LoginPage() {
                 />
               </div>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                </div>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  placeholder="Password"
-                  className="w-full pl-12 pr-4 py-4 border-2 border-blue-200 rounded-xl focus:border-blue-500 focus:outline-none transition-all bg-blue-50/30 text-gray-800 placeholder-blue-400 shadow-sm"
-                />
-              </div>
+  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+    <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+    </svg>
+  </div>
+  <input
+    type={showPassword ? 'text' : 'password'}
+    value={password}
+    onChange={(e) => setPassword(e.target.value)}
+    required
+    placeholder="Password"
+    className="w-full pl-12 pr-12 py-4 border-2 border-blue-200 rounded-xl focus:border-blue-500 focus:outline-none transition-all bg-blue-50/30 text-gray-800 placeholder-blue-400 shadow-sm"
+  />
+  <div
+    className="absolute inset-y-0 right-0 pr-4 flex items-center cursor-pointer text-blue-500"
+    onClick={() => setShowPassword(prev => !prev)}
+  >
+    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+  </div>
+</div>
+
             </div>
             <button
               type="submit"
@@ -195,6 +204,16 @@ export default function LoginPage() {
             >
               Next
             </button>
+            <div className="text-right mt-2">
+  <button
+    type="button"
+    onClick={() => window.location.href = '/forgot-password'}
+    className="text-sm text-blue-600 hover:underline"
+  >
+    Forgot Password?
+  </button>
+</div>
+
             {/* Divider and Sign Up CTA */}
 <div className="relative mt-10">
   <div className="absolute inset-0 flex items-center">

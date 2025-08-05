@@ -4,7 +4,7 @@ import axios from 'axios';
 const API_BASE = import.meta.env.VITE_API_BASE;
 
 export default function BikeManagementSection() {
-  const token = localStorage.getItem('idToken');
+  const token = localStorage.getItem('accessToken'); // ✅ updated from idToken
   const [bikes, setBikes] = useState([]);
   const [editBike, setEditBike] = useState(null);
   const [showAddBike, setShowAddBike] = useState(false);
@@ -66,31 +66,35 @@ export default function BikeManagementSection() {
     }
 
     try {
-      await axios.put(`${API_BASE}/bikes/${editBike.bike_id}`, {
+      console.log('Sending update for:', editBike);
+      const res = await axios.put(`${API_BASE}/bikes/${editBike.bike_id}`, {
         dailyRate: parseFloat(editBike.dailyRate),
         features: editBike.features,
         count
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      console.log('Update success:', res.status);
       setEditBike(null);
       await fetchBikes();
     } catch (err) {
       console.error('Edit failed:', err.response?.data || err.message);
-      alert(`Edit failed: ${err.message}`);
+      alert(`Edit failed: ${err.response?.data?.message || err.message}`);
     }
   };
 
   const handleDeleteBike = async (bikeId) => {
     if (!confirm('Are you sure you want to delete this bike?')) return;
     try {
-      await axios.delete(`${API_BASE}/bikes/${bikeId}`, {
+      console.log('Deleting bike:', bikeId);
+      const res = await axios.delete(`${API_BASE}/bikes/${bikeId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      console.log('Delete success:', res.status);
       await fetchBikes();
     } catch (err) {
       console.error('Delete failed:', err.response?.data || err.message);
-      alert(`Delete failed: ${err.message}`);
+      alert(`Delete failed: ${err.response?.data?.message || err.message}`);
     }
   };
 
@@ -178,7 +182,7 @@ export default function BikeManagementSection() {
 
       {/* Edit Modal */}
       {editBike && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 backdrop-blur-sm flex items-center justify-center z-50">
+<div className="fixed inset-0 bg-gradient-to-br from-blue-200/60 to-indigo-200/60 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-8 w-full max-w-md shadow-xl">
             <h3 className="text-xl font-bold text-blue-800 mb-4">Edit Bike</h3>
             <form onSubmit={handleEditBike} className="space-y-4">
@@ -192,18 +196,15 @@ export default function BikeManagementSection() {
                   required
                 />
               </div>
-
               <div>
-                <label className="block text-sm font-semibold text-blue-700 mb-2">Features (comma-separated)</label>
+                <label className="block text-sm font-semibold text-blue-700 mb-2">Features</label>
                 <textarea
                   rows={2}
                   value={editBike.features}
                   onChange={(e) => setEditBike({ ...editBike, features: e.target.value })}
                   className="w-full p-3 border border-blue-300 rounded-lg"
-                  placeholder="GPS, Speed Control, Height Adjustment"
                 />
               </div>
-
               <div>
                 <label className="block text-sm font-semibold text-blue-700 mb-2">Total Count</label>
                 <input
@@ -214,7 +215,6 @@ export default function BikeManagementSection() {
                   required
                 />
               </div>
-
               <div className="flex justify-between pt-4">
                 <button
                   type="submit"
@@ -253,7 +253,6 @@ export default function BikeManagementSection() {
                   <option value="Segway">Segway</option>
                 </select>
               </div>
-
               <div>
                 <label className="block text-sm font-semibold text-blue-700 mb-2">Daily Rate ($)</label>
                 <input
@@ -264,7 +263,6 @@ export default function BikeManagementSection() {
                   required
                 />
               </div>
-
               <div>
                 <label className="block text-sm font-semibold text-blue-700 mb-2">Features (comma-separated)</label>
                 <textarea
@@ -275,7 +273,6 @@ export default function BikeManagementSection() {
                   rows={2}
                 />
               </div>
-
               <div>
                 <label className="block text-sm font-semibold text-blue-700 mb-2">Number of Bikes</label>
                 <input
@@ -286,7 +283,6 @@ export default function BikeManagementSection() {
                   required
                 />
               </div>
-
               <div className="flex space-x-4 pt-4">
                 <button
                   type="submit"

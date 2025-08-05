@@ -208,18 +208,22 @@ export default function CustomerDashboard() {
         {activeTab === 'myBookings' && <MyBookings token={getAuthToken()} />}
 
         {activeTab === 'messages' && (
-          <>
-            <div className="max-w-xl mx-auto">
-              <CustomerConversationList onOpenChat={setChatBookingId} />
-            </div>
-            {chatBookingId && (
-              <CustomerChatModal
-                bookingId={chatBookingId}
-                onClose={() => setChatBookingId(null)}
-              />
-            )}
-          </>
-        )}
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 px-4">
+    <div className="bg-white p-6 rounded-xl shadow-lg border border-blue-100 w-full">
+      <CustomerConversationList onOpenChat={setChatBookingId} />
+    </div>
+
+    {chatBookingId && (
+      <div className="bg-white p-6 rounded-xl shadow-lg border border-blue-100 w-full">
+        <CustomerChatModal
+          bookingId={chatBookingId}
+          onClose={() => setChatBookingId(null)}
+        />
+      </div>
+    )}
+  </div>
+)}
+
 
         {activeTab === 'feedback' && (
           <div className="max-w-xl mx-auto">

@@ -1,4 +1,3 @@
-// src/components/Customer/SubmitFeedbackFromBookings.jsx
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
@@ -22,7 +21,6 @@ export default function SubmitFeedbackFromBookings() {
           headers: { Authorization: `Bearer ${token}` },
         });
 
-        // ✅ Show bookings eligible for feedback
         const eligible = res.data.filter(b =>
           ['CONFIRMED', 'COMPLETED', 'FINISHED'].includes(b.status)
         );

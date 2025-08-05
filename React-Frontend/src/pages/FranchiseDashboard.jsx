@@ -56,12 +56,13 @@ export default function FranchiseDashboard() {
   };
 
   const tabs = [
-    { id: 'overview', name: 'Overview', icon: '📊' },
-    { id: 'bikes', name: 'Bike Management', icon: '🚲' },
-    { id: 'bookings', name: 'Bookings', icon: '📅' },
-    { id: 'support', name: 'Support', icon: '🛠️' },
-    { id: 'messages', name: 'Customers & Messages', icon: '💬' }
-  ];
+  { id: 'overview', name: 'Overview', icon: '📊' },
+  { id: 'bikes', name: 'Bike Management', icon: '🚲' },
+  { id: 'bookings', name: 'Bookings', icon: '📅' },
+  { id: 'support', name: 'Customers', icon: '👥' }, // updated icon and label
+  { id: 'messages', name: 'Messages', icon: '💬' }   // renamed cleanly
+];
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -78,16 +79,18 @@ export default function FranchiseDashboard() {
                 <p className="text-blue-600">Franchise Dashboard</p>
               </div>
             </div>
-            <div className="flex items-center space-x-4">
-              <button className="text-blue-600 hover:text-blue-800 transition-colors">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5v-5zM21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </button>
-              <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
-                <span className="text-white font-semibold">F</span>
-              </div>
-            </div>
+            <div className="flex items-center">
+  <button
+    onClick={() => {
+      localStorage.clear();
+      window.location.href = '/login';
+    }}
+    className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-semibold transition-all"
+  >
+    Logout
+  </button>
+</div>
+
           </div>
         </div>
       </div>
@@ -133,21 +136,15 @@ export default function FranchiseDashboard() {
           {activeTab === 'bookings' && <BookingSection />}
 
           {activeTab === 'support' && (
-            <SupportSection
-              tickets={tickets}
-              selectedTicket={selectedTicket}
-              setSelectedTicket={setSelectedTicket}
-              showChat={showChat}
-              setShowChat={setShowChat}
-            />
-          )}
+  <SupportSection /> 
+)}
+
+
 
           {activeTab === 'messages' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <CustomerList />
-              <ConversationList onOpenChat={(bookingId) => setSelectedBookingId(bookingId)} />
-            </div>
-          )}
+  <ConversationList onOpenChat={(bookingId) => setSelectedBookingId(bookingId)} />
+)}
+
 
           {/* Chat Modal (global) */}
           {selectedBookingId && (

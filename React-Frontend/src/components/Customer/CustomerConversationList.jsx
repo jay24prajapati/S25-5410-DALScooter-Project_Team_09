@@ -1,4 +1,3 @@
-// src/components/Customer/CustomerConversationList.jsx
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 
@@ -31,11 +30,15 @@ export default function CustomerConversationList({ onOpenChat }) {
         {bookings.map((b) => (
           <li
             key={b.booking_id}
-            onClick={() => onOpenChat(b.booking_id)}
             className="cursor-pointer hover:bg-blue-50 p-2 rounded border"
+            onClick={() => onOpenChat(b.booking_id)}
           >
-            <div className="text-sm font-semibold">Booking: {b.booking_id.slice(0, 8)}</div>
-            <div className="text-xs text-gray-600">Date: {b.date} | Rate: ${b.dailyRate}</div>
+            <div className="text-sm font-semibold text-blue-800">
+              Booking: {b.booking_id.slice(0, 8)}
+            </div>
+            <div className="text-xs text-gray-600">
+              Date: {new Date(b.date).toLocaleDateString()} | Rate: ${b.dailyRate}
+            </div>
           </li>
         ))}
       </ul>

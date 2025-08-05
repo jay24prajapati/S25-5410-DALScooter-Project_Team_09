@@ -3,119 +3,112 @@ import axios from 'axios';
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
-export default function OverviewSection({ bookings, tickets }) {
-  const [totalCount, setTotalCount] = useState(0);
-  const [availableCount, setAvailableCount] = useState(0);
-  const [activeBookings, setActiveBookings] = useState(0);
+export default function OverviewSection({ tickets }) {
+  const [stats, setStats] = useState({
+    totalBikes: 0,
+    activeBikes: 0,
+    totalBookings: 0,
+    totalRevenue: 0,
+    uniqueCustomers: 0,
+    confirmedBookings: 0,
+    cancelledBookings: 0
+  });
+
   const [openTickets, setOpenTickets] = useState(0);
 
-  const token = localStorage.getItem('idToken'); // Or get from auth context
-const franchiseId = localStorage.getItem('userId'); // Assuming franchise ID is stored in localStorage
+  const token = localStorage.getItem('idToken');
+  const franchiseId = localStorage.getItem('userId');
+
   useEffect(() => {
-    const fetchDashboardStats = async () => {
+    const fetchStats = async () => {
       try {
         const res = await axios.get(`${API_BASE}/franchise/dashboard`, {
-      
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
+          headers: { Authorization: `Bearer ${token}` }
         });
 
-        const bikeStats = res.data.bikeStatistics || {};
         const bookingStats = res.data.bookingStatistics || {};
+        const bikeStats = res.data.bikeStatistics || {};
+        const statusBreakdown = bookingStats.statusBreakdown || {};
 
-        setTotalCount(bikeStats.totalBikeCount || 0);
-        setAvailableCount(bikeStats.activeBikes || 0);
-
-        setActiveBookings(bookingStats.statusBreakdown?.CONFIRMED || 0);
+        setStats({
+          totalBikes: bikeStats.totalBikeCount || 0,
+          activeBikes: bikeStats.activeBikes || 0,
+          totalBookings: bookingStats.totalBookings || 0,
+          totalRevenue: bookingStats.totalRevenue || 0,
+          uniqueCustomers: bookingStats.uniqueCustomers || 0,
+          confirmedBookings: statusBreakdown.CONFIRMED || 0,
+          cancelledBookings: statusBreakdown.CANCELLED || 0
+        });
       } catch (err) {
         console.error('Failed to fetch dashboard stats:', err);
       }
     };
 
-    fetchDashboardStats();
+    fetchStats();
   }, [franchiseId]);
 
   useEffect(() => {
-    setOpenTickets(tickets.filter((t) => t.status === 'Open').length);
+    setOpenTickets(tickets?.filter((t) => t.status === 'Open').length || 0);
   }, [tickets]);
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
         {/* Total Bikes */}
-        <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-xl shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-blue-100 text-sm">Total Bikes</p>
-              <p className="text-3xl font-bold">{totalCount}</p>
-            </div>
-            <svg className="w-12 h-12 text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-          </div>
-        </div>
+        <StatCard title="Total Bikes" value={stats.totalBikes} color="blue" iconPath="M13 10V3L4 14h7v7l9-11h-7z" />
 
-        {/* Available Bikes */}
-        <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-xl shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-green-100 text-sm">Available</p>
-              <p className="text-3xl font-bold">{availableCount}</p>
-            </div>
-            <svg className="w-12 h-12 text-green-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-        </div>
+        {/* Active Bikes */}
+        <StatCard title="Active Bikes" value={stats.activeBikes} color="green" iconPath="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
 
-        {/* Active Bookings */}
-        <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-6 rounded-xl shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-orange-100 text-sm">Active Bookings</p>
-              <p className="text-3xl font-bold">{activeBookings}</p>
-            </div>
-            <svg className="w-12 h-12 text-orange-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-        </div>
+        {/* Confirmed Bookings */}
+        <StatCard title="Confirmed Bookings" value={stats.confirmedBookings} color="orange" iconPath="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+
+        {/* Cancelled Bookings */}
+        <StatCard title="Cancelled Bookings" value={stats.cancelledBookings} color="red" iconPath="M6 18L18 6M6 6l12 12" />
+
+        {/* Total Revenue */}
+        <StatCard title="Total Revenue" value={`$${stats.totalRevenue.toFixed(2)}`} color="purple" iconPath="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3z" />
+
+        {/* Unique Customers */}
+        <StatCard title="Unique Customers" value={stats.uniqueCustomers} color="indigo" iconPath="M16 14c2.21 0 4 1.79 4 4v1H4v-1c0-2.21 1.79-4 4-4h8zm-4-2c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" />
+
+        {/* Total Bookings */}
+        <StatCard title="Total Bookings" value={stats.totalBookings} color="yellow" iconPath="M3 7h18M3 12h18M3 17h18" />
 
         {/* Open Tickets */}
-        <div className="bg-gradient-to-r from-red-500 to-red-600 text-white p-6 rounded-xl shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-red-100 text-sm">Open Tickets</p>
-              <p className="text-3xl font-bold">{openTickets}</p>
-            </div>
-            <svg className="w-12 h-12 text-red-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.728-.833-2.498 0L4.316 15.5c-.77.833.192 2.5 1.732 2.5z" />
-            </svg>
-          </div>
-        </div>
+        <StatCard title="Open Tickets" value={openTickets} color="pink" iconPath="M12 9v2m0 4h.01M6.938 19h10.124a2 2 0 001.732-2.5L13.732 4a2 2 0 00-3.464 0L5.206 16.5a2 2 0 001.732 2.5z" />
       </div>
 
-      {/* Static Recent Activity */}
-      <div className="bg-white rounded-xl shadow-lg p-6 border border-blue-100">
-        <h3 className="text-xl font-bold text-blue-800 mb-4">Recent Activity</h3>
-        <div className="space-y-3">
-          <div className="flex items-center p-3 bg-blue-50 rounded-lg">
-            <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-            <span className="text-blue-700">New booking BK003 received for Segway SW-003</span>
-            <span className="ml-auto text-blue-500 text-sm">5 min ago</span>
-          </div>
-          <div className="flex items-center p-3 bg-green-50 rounded-lg">
-            <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-            <span className="text-green-700">eBike EB-001 returned successfully</span>
-            <span className="ml-auto text-green-500 text-sm">15 min ago</span>
-          </div>
-          <div className="flex items-center p-3 bg-orange-50 rounded-lg">
-            <div className="w-2 h-2 bg-orange-500 rounded-full mr-3"></div>
-            <span className="text-orange-700">New support ticket T003 created</span>
-            <span className="ml-auto text-orange-500 text-sm">30 min ago</span>
-          </div>
+      {/* You can insert a Revenue Chart or Recent Activity here if needed */}
+    </div>
+  );
+}
+
+// Reusable card component
+function StatCard({ title, value, color, iconPath }) {
+  const colors = {
+    blue: 'from-blue-500 to-blue-600 text-blue-100',
+    green: 'from-green-500 to-green-600 text-green-100',
+    orange: 'from-orange-500 to-orange-600 text-orange-100',
+    red: 'from-red-500 to-red-600 text-red-100',
+    purple: 'from-purple-500 to-purple-600 text-purple-100',
+    indigo: 'from-indigo-500 to-indigo-600 text-indigo-100',
+    yellow: 'from-yellow-500 to-yellow-600 text-yellow-100',
+    pink: 'from-pink-500 to-pink-600 text-pink-100'
+  };
+
+  const textColor = colors[color] || 'from-gray-500 to-gray-600 text-gray-100';
+
+  return (
+    <div className={`bg-gradient-to-r ${textColor} p-6 rounded-xl shadow-lg`}>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm">{title}</p>
+          <p className="text-3xl font-bold text-white">{value}</p>
         </div>
+        <svg className="w-10 h-10 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={iconPath} />
+        </svg>
       </div>
     </div>
   );

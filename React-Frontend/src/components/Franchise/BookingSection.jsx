@@ -98,43 +98,49 @@ export default function BookingSection() {
         </div>
 
         {/* Booking Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-blue-50">
-              <tr>
-                <th className="px-6 py-4 text-left text-blue-700 font-semibold">Booking ID</th>
-                <th className="px-6 py-4 text-left text-blue-700 font-semibold">Customer</th>
-                <th className="px-6 py-4 text-left text-blue-700 font-semibold">Bike</th>
-                <th className="px-6 py-4 text-left text-blue-700 font-semibold">Date</th>
-                <th className="px-6 py-4 text-left text-blue-700 font-semibold">Time</th>
-                <th className="px-6 py-4 text-left text-blue-700 font-semibold">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {bookings.map((booking) => {
-                const bike = bikes.find((b) => b.id === booking.bikeId);
-                return (
-                  <tr key={booking.id} className="border-b border-blue-100 hover:bg-blue-50">
-                    <td className="px-6 py-4 font-mono text-blue-600">{booking.id}</td>
-                    <td className="px-6 py-4">{booking.customer}</td>
-                    <td className="px-6 py-4">{bike?.model || 'Unknown'} ({bike?.type || 'N/A'})</td>
-                    <td className="px-6 py-4">{new Date(booking.date).toLocaleDateString()}</td>
-                    <td className="px-6 py-4">{booking.startTime} - {booking.endTime}</td>
-                    <td className="px-6 py-4">
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                        booking.status === 'CONFIRMED'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-blue-100 text-blue-800'
-                      }`}>
-                        {booking.status}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        {/* Booking Table */}
+<div className="overflow-x-auto">
+  <table className="w-full">
+    <thead className="bg-blue-50">
+      <tr>
+        <th className="px-6 py-4 text-left text-blue-700 font-semibold">Booking ID</th>
+        <th className="px-6 py-4 text-left text-blue-700 font-semibold">Customer ID</th>
+        <th className="px-6 py-4 text-left text-blue-700 font-semibold">Date</th>
+        <th className="px-6 py-4 text-left text-blue-700 font-semibold">Rate</th>
+        <th className="px-6 py-4 text-left text-blue-700 font-semibold">Access Code</th>
+        <th className="px-6 py-4 text-left text-blue-700 font-semibold">Status</th>
+        <th className="px-6 py-4 text-left text-blue-700 font-semibold">Created At</th>
+      </tr>
+    </thead>
+    <tbody>
+      {bookings.map((booking) => {
+        const bike = bikes.find((b) => b.id === booking.bikeId);
+        return (
+          <tr key={booking.id} className="border-b border-blue-100 hover:bg-blue-50">
+            <td className="px-6 py-4 font-mono text-blue-600">{booking.id}</td>
+            <td className="px-6 py-4 text-sm">{booking.customerId}</td>
+            <td className="px-6 py-4">{new Date(booking.date).toLocaleDateString()}</td>
+            <td className="px-6 py-4">${booking.rate.toFixed(2)}</td>
+            <td className="px-6 py-4 font-mono text-blue-700">{booking.accessCode}</td>
+            <td className="px-6 py-4">
+              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                booking.status === 'CONFIRMED'
+                  ? 'bg-green-100 text-green-800'
+                  : 'bg-blue-100 text-blue-800'
+              }`}>
+                {booking.status}
+              </span>
+            </td>
+            <td className="px-6 py-4 text-sm text-gray-600">
+              {new Date(booking.createdAt).toLocaleString()}
+            </td>
+          </tr>
+        );
+      })}
+    </tbody>
+  </table>
+</div>
+
       </div>
     </div>
   );

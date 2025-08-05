@@ -1,6 +1,4 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE;
-// src/components/Customer/CustomerProfile.tsx
-// src/components/Customer/CustomerProfile.jsx
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 

@@ -30,7 +30,7 @@ export default function BookingMessages({ bookingId, onClose }) {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setNewMessage('');
-      fetchMessages(); // refresh
+      fetchMessages(); 
     } catch (err) {
       console.error('Error sending message:', err);
     }

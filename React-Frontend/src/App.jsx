@@ -8,7 +8,9 @@ import ProtectedFranchiseRoute from './routes/ProtectedFranchiseRoute';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import FranchiseDashboard from './pages/FranchiseDashboard.JSX';
-function App() {
+import ForgotPassword from './pages/ForgotPassword.jsx';
+import ResetPassword from './pages/ResetPassword.jsx';
+function App() {  
   return (
     <div className="App">
       <Routes>
@@ -17,7 +19,9 @@ function App() {
         <Route path="/auth" element={<AuthPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/login" element={<LoginPage />} />
-        
+        <Route path="/reset-password" element={<ResetPassword />} />
+
+        <Route path="/forgot-password" element={<ForgotPassword />} />
 
         {/* 🔐 Protected Route */}
         <Route
