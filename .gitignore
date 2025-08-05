@@ -1,3 +1,55 @@
-.DS_Store
-.idea/
+# Dependency directories
 node_modules/
+.pnp/
+.pnp.js
+
+# Build output
+dist/
+build/
+
+# Optional npm cache directory
+.npm/
+
+# Vite / CRA cache
+.vite/
+.cache/
+
+# Test coverage
+coverage/
+
+# Local env files
+.env
+.env.*.local
+.env.local
+
+# IDE settings
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Mac .Trash folder (just in case)
+.Trashes
+
+# ESLint cache
+.eslintcache
+
+# JetBrains
+*.iml
+*.iws
+out/
+
+# Optional Next.js / Astro / Remix fallback (in case mixed workspace)
+.next/
+.vercel/
+.netlify/
