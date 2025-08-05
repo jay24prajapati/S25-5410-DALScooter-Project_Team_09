@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import OverviewSection from '../components/Franchise/OverviewSection';
 import BikeManagementSection from '../components/Franchise/BikeManagementSection';
 import BookingSection from '../components/Franchise/BookingSection';
 import SupportSection from '../components/Franchise/SupportSection';
-import CustomerList from '../components/Franchise/CustomerList';
 import ConversationList from '../components/Franchise/ConversationList';
 import ChatModal from '../components/Franchise/ChatModal';
+
+const API_BASE = import.meta.env.VITE_API_BASE;
 
 export default function FranchiseDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -21,48 +23,37 @@ export default function FranchiseDashboard() {
     features: ''
   });
 
-  const [showChat, setShowChat] = useState(false);
-  const [selectedTicket, setSelectedTicket] = useState(null);
   const [selectedBookingId, setSelectedBookingId] = useState(null);
 
+  // Auto-close chat modal on tab switch
   useEffect(() => {
-    // Auto-close chat when tab changes
-    setShowChat(false);
     setSelectedBookingId(null);
-    setSelectedTicket(null);
   }, [activeTab]);
 
-  const handleAddBike = (e) => {
-    e.preventDefault();
-    const bike = {
-      id: bikes.length + 1,
-      type: newBike.type,
-      model: newBike.model,
-      accessCode: newBike.accessCode,
-      status: 'Available',
-      rate: parseFloat(newBike.rate),
-      battery: 100,
-      features: newBike.features.split(',').map(f => f.trim())
+  // Fetch bikes from backend
+  useEffect(() => {
+    const fetchBikes = async () => {
+      try {
+        const token = localStorage.getItem('idToken');
+        const today = new Date().toISOString().split('T')[0];
+        const res = await axios.get(`${API_BASE}/bikes?date=${today}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setBikes(res.data);
+      } catch (err) {
+        console.error('Failed to fetch bikes:', err);
+      }
     };
-    setBikes([...bikes, bike]);
-    setShowAddBike(false);
-    setNewBike({ type: 'eBike', model: '', accessCode: '', rate: '', features: '' });
-  };
-
-  const updateBikeRate = (bikeId, newRate) => {
-    setBikes(bikes.map(bike =>
-      bike.id === bikeId ? { ...bike, rate: newRate } : bike
-    ));
-  };
+    fetchBikes();
+  }, []);
 
   const tabs = [
-  { id: 'overview', name: 'Overview', icon: '' },
-  { id: 'bikes', name: 'Bike Management', icon: '' },
-  { id: 'bookings', name: 'Bookings', icon: '' },
-  { id: 'support', name: 'Customers', icon: '' }, // updated icon and label
-  { id: 'messages', name: 'Messages', icon: '' }   // renamed cleanly
-];
-
+    { id: 'overview', name: 'Overview', icon: '' },
+    { id: 'bikes', name: 'Bike Management', icon: '' },
+    { id: 'bookings', name: 'Bookings', icon: '' },
+    { id: 'support', name: 'Customers', icon: '' },
+    { id: 'messages', name: 'Messages', icon: '' }
+  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -79,18 +70,17 @@ export default function FranchiseDashboard() {
                 <p className="text-blue-600">Franchise Dashboard</p>
               </div>
             </div>
-            <div className="flex items-center">
-  <button
-    onClick={() => {
-      localStorage.clear();
-      window.location.href = '/login';
-    }}
-    className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-semibold transition-all"
-  >
-    Logout
-  </button>
-</div>
-
+            <div>
+              <button
+                onClick={() => {
+                  localStorage.clear();
+                  window.location.href = '/login';
+                }}
+                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-semibold transition-all"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -117,7 +107,7 @@ export default function FranchiseDashboard() {
         {/* Tab Content */}
         <div className="mb-16">
           {activeTab === 'overview' && (
-            <OverviewSection bookings={[]} tickets={tickets} />
+            <OverviewSection bookings={[]} tickets={tickets} bikes={bikes} />
           )}
 
           {activeTab === 'bikes' && (
@@ -128,25 +118,18 @@ export default function FranchiseDashboard() {
               setShowAddBike={setShowAddBike}
               newBike={newBike}
               setNewBike={setNewBike}
-              handleAddBike={handleAddBike}
-              updateBikeRate={updateBikeRate}
             />
           )}
 
           {activeTab === 'bookings' && <BookingSection />}
 
-          {activeTab === 'support' && (
-  <SupportSection /> 
-)}
-
-
+          {activeTab === 'support' && <SupportSection />}
 
           {activeTab === 'messages' && (
-  <ConversationList onOpenChat={(bookingId) => setSelectedBookingId(bookingId)} />
-)}
+            <ConversationList onOpenChat={(bookingId) => setSelectedBookingId(bookingId)} />
+          )}
 
-
-          {/* Chat Modal (global) */}
+          {/* Chat Modal */}
           {selectedBookingId && (
             <ChatModal
               bookingId={selectedBookingId}

@@ -57,7 +57,7 @@ export default function MyBookings() {
           b.booking_id === booking_id ? { ...b, status: 'CANCELLED' } : b
         )
       );
-      toast.success('Booking cancelled.');
+      toast.success('Booking cancelled successfully!');
     } catch (err) {
       console.error('Cancel error:', err);
       toast.error('Failed to cancel booking.');
@@ -69,7 +69,7 @@ export default function MyBookings() {
   const getBikeByBookingRef = (refId) => {
     const booking = bookings.find((b) => b.booking_id === refId);
     if (!booking) return null;
-    const bike = bikes.find((b) => b.id === booking.bike_id);
+    const bike = bikes.find((b) => b.bike_id === booking.bike_id);
     return { booking, bike };
   };
 
@@ -78,7 +78,7 @@ export default function MyBookings() {
     if (result) {
       const { booking, bike } = result;
       alert(
-        `Bike: ${bike?.model || 'Unknown'}\n` +
+        `Bike: ${bike?.type || 'Unknown'}\n` +
         `Date: ${format(new Date(booking.date), 'yyyy-MM-dd')}\n` +
         `Access Code: ${booking.accessCode || 'Not available yet'}\n` +
         `Booking Status: ${booking.status}`
@@ -90,101 +90,95 @@ export default function MyBookings() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-blue-800">My Bookings</h2>
+      <h3 className="text-2xl font-bold text-blue-800">My Bookings</h3>
 
-      {/* Lookup Section */}
-      <div className="bg-white p-5 rounded-xl shadow border border-blue-100">
-        <h4 className="text-lg font-semibold text-blue-700 mb-2">Lookup by Booking Reference</h4>
-        <div className="flex space-x-4">
-          <input
-            type="text"
-            className="flex-1 p-3 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Enter Booking ID"
-            value={lookupRef}
-            onChange={(e) => setLookupRef(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleLookup()}
-          />
-          <button
-            onClick={handleLookup}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-          >
-            Lookup
-          </button>
+      <div className="bg-white rounded-xl shadow-lg border border-blue-100">
+        {/* Booking Lookup */}
+        <div className="p-6 border-b border-blue-100">
+          <h4 className="text-lg font-semibold text-blue-700">Booking Reference Lookup</h4>
+          <div className="mt-4 flex space-x-4">
+            <input
+              type="text"
+              placeholder="Enter booking reference"
+              className="flex-1 p-3 border-2 border-blue-200 rounded-lg focus:border-blue-500 focus:outline-none"
+              value={lookupRef}
+              onChange={(e) => setLookupRef(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleLookup()}
+            />
+            <button
+              onClick={handleLookup}
+              className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors"
+            >
+              Lookup
+            </button>
+          </div>
         </div>
+
+        {/* Booking Table */}
+        {loading ? (
+          <div className="p-8 text-center">
+            <p className="text-blue-600">Loading bookings...</p>
+          </div>
+        ) : bookings.length === 0 ? (
+          <div className="p-8 text-center">
+            <p className="text-gray-500">No bookings found.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-blue-50">
+                <tr>
+                  <th className="px-6 py-4 text-left text-blue-700 font-semibold">Bike Type</th>
+                  <th className="px-6 py-4 text-left text-blue-700 font-semibold">Date</th>
+                  <th className="px-6 py-4 text-left text-blue-700 font-semibold">Rate</th>
+                  <th className="px-6 py-4 text-left text-blue-700 font-semibold">Access Code</th>
+                  <th className="px-6 py-4 text-left text-blue-700 font-semibold">Status</th>
+                  <th className="px-6 py-4 text-left text-blue-700 font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bookings.map((booking) => {
+                  const bike = bikes.find((b) => b.bike_id === booking.bike_id);
+                  return (
+                    <tr key={booking.booking_id} className="border-b border-blue-100 hover:bg-blue-50">
+                      <td className="px-6 py-4 font-semibold text-gray-800">
+                        {bike?.type || 'Unknown'}
+                      </td>
+                      <td className="px-6 py-4">{booking.date}</td>
+                      <td className="px-6 py-4">${booking.dailyRate}</td>
+                      <td className="px-6 py-4 font-mono text-blue-700">
+                        {booking.accessCode || 'Pending'}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                          booking.status === 'CONFIRMED'
+                            ? 'bg-green-100 text-green-800'
+                            : booking.status === 'CANCELLED'
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {booking.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        {booking.status !== 'CANCELLED' && (
+                          <button
+                            onClick={() => cancelBooking(booking.booking_id)}
+                            disabled={cancellingId === booking.booking_id}
+                            className="text-sm px-3 py-1 rounded bg-red-500 hover:bg-red-600 text-white transition-all disabled:bg-gray-400"
+                          >
+                            {cancellingId === booking.booking_id ? 'Cancelling...' : 'Cancel'}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
-
-      {/* Bookings List */}
-      {loading ? (
-        <p className="text-blue-600">Loading bookings...</p>
-      ) : bookings.length === 0 ? (
-        <p className="text-gray-500">No bookings found.</p>
-      ) : (
-        <div className="space-y-4">
-          {bookings.map((b) => {
-            const bike = bikes.find((bk) => bk.id === b.bike_id);
-            return (
-              <div
-                key={b.booking_id}
-                className="bg-white p-5 shadow rounded-lg border border-blue-100"
-              >
-                <div className="flex justify-between items-center mb-2">
-                  <div>
-                    <p className="font-semibold text-gray-800">
-                      {bike?.model || 'Unknown'} ({bike?.type || 'N/A'})
-                    </p>
-                    <p className="text-sm text-gray-500">
-Date: {b.date}
-                    </p>
-                    <p className="text-sm text-gray-500">Rate: ${b.dailyRate}</p>
-                  </div>
-                  <div className="text-right">
-                    <p
-                      className={`font-semibold text-sm ${
-                        b.status === 'CONFIRMED'
-                          ? 'text-green-600'
-                          : b.status === 'CANCELLED'
-                          ? 'text-red-600'
-                          : 'text-gray-600'
-                      }`}
-                    >
-                      {b.status}
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      #{b.booking_id.slice(0, 8)}...
-                    </p>
-                  </div>
-                </div>
-
-                {b.accessCode ? (
-                  <p className="text-sm font-mono text-gray-700">
-                    Access Code:{' '}
-                    <span className="bg-gray-100 px-2 py-1 rounded">
-                      {b.accessCode}
-                    </span>
-                  </p>
-                ) : (
-                  <p className="text-sm text-gray-400 italic">
-                    Access code will be available on ride day.
-                  </p>
-                )}
-
-                {b.status !== 'CANCELLED' && (
-  <div className="mt-3 text-right">
-    <button
-      onClick={() => cancelBooking(b.booking_id)}
-      disabled={cancellingId === b.booking_id}
-      className="text-sm px-4 py-2 rounded shadow bg-red-500 hover:bg-red-600 text-white transition-all"
-    >
-      {cancellingId === b.booking_id ? 'Cancelling...' : 'Cancel Booking'}
-    </button>
-  </div>
-)}
-
-              </div>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }

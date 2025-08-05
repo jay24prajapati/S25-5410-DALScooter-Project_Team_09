@@ -73,9 +73,11 @@ export default function BikeManagementSection() {
         features: editBike.features,
         count
       }, {
-        headers: { Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json' }
-      });
+  headers: {
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json'  
+  }
+});
       console.log('Update success:', res.status);
       setEditBike(null);
       await fetchBikes();
