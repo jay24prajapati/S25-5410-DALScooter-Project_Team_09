@@ -56,11 +56,11 @@ export default function FranchiseDashboard() {
   };
 
   const tabs = [
-  { id: 'overview', name: 'Overview', icon: '📊' },
-  { id: 'bikes', name: 'Bike Management', icon: '🚲' },
-  { id: 'bookings', name: 'Bookings', icon: '📅' },
-  { id: 'support', name: 'Customers', icon: '👥' }, // updated icon and label
-  { id: 'messages', name: 'Messages', icon: '💬' }   // renamed cleanly
+  { id: 'overview', name: 'Overview', icon: '' },
+  { id: 'bikes', name: 'Bike Management', icon: '' },
+  { id: 'bookings', name: 'Bookings', icon: '' },
+  { id: 'support', name: 'Customers', icon: '' }, // updated icon and label
+  { id: 'messages', name: 'Messages', icon: '' }   // renamed cleanly
 ];
 
 
