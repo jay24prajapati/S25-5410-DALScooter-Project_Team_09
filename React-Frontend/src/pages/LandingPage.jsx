@@ -12,7 +12,6 @@ const LandingPage = () => {
 
     const API_BASE = import.meta.env.VITE_API_BASE
 
-    // Fetch bikes from API
     const fetchBikes = async () => {
         try {
             const response = await fetch(`${API_BASE}/bikes`)
@@ -172,7 +171,6 @@ const LandingPage = () => {
                             </button>
                         </div>
 
-                        {/* Mobile Menu Button */}
                         <div className="md:hidden">
                             <button
                                 onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -184,7 +182,6 @@ const LandingPage = () => {
                     </div>
                 </div>
 
-                {/* Mobile Menu */}
                 {isMenuOpen && (
                     <div className="md:hidden bg-white border-t border-gray-200">
                         <div className="px-2 pt-2 pb-3 space-y-1">
@@ -208,7 +205,6 @@ const LandingPage = () => {
                 )}
             </nav>
 
-            {/* Hero Section */}
             <section className="pt-16 bg-gradient-to-br from-blue-50 to-indigo-100">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
                     <div className="text-center">
@@ -229,7 +225,6 @@ const LandingPage = () => {
                             </button>
                         </div>
 
-                        {/* Dynamic Stats */}
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-6 max-w-2xl mx-auto">
                             <div className="text-center">
                                 <div className="text-3xl font-bold text-blue-600">{totalAvailable}</div>
@@ -248,7 +243,6 @@ const LandingPage = () => {
                 </div>
             </section>
 
-            {/* Fleet Section */}
             <section id="bikes" className="py-20 bg-white">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="text-center mb-16">

@@ -10,6 +10,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import FranchiseDashboard from './pages/FranchiseDashboard.JSX';
 import ForgotPassword from './pages/ForgotPassword.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
+import StatsPage from './pages/Analytics/Analytics.js';
 function App() {  
   return (
     <div className="App">
@@ -20,8 +21,8 @@ function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/reset-password" element={<ResetPassword />} />
-
         <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/stats" element={<StatsPage />} />
 
         {/* 🔐 Protected Route */}
         <Route

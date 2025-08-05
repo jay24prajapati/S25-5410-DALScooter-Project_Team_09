@@ -17,7 +17,6 @@ export default function ForgotPassword() {
 
       toast.success('Reset instructions sent to your email!');
 
-      // Redirect to ResetPassword and pass sessionId and email
       navigate('/reset-password', {
         state: {
           sessionId,
