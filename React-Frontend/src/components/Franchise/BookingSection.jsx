@@ -8,27 +8,41 @@ export default function BookingSection() {
   const [bikes, setBikes] = useState([]);
   const [lookupRef, setLookupRef] = useState('');
 
-  // Fetch confirmed franchise bookings
   const fetchBookings = async () => {
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = localStorage.getItem('idToken');
       const response = await axios.get(
         `${API_BASE}/franchise/bookings?status=CONFIRMED&dateFrom=2025-07-01&dateTo=2025-08-31`,
         {
           headers: { Authorization: `Bearer ${token}` }
         }
       );
-      setBookings(response.data);
+      console.log('Bookings fetched:', response.data);
+
+      const normalized = response.data.bookings.map(b => ({
+        id: b.booking_id,
+        bikeId: b.bike_id,
+        customerId: b.customer_id,
+        date: b.date,
+        status: b.status,
+        rate: b.dailyRate,
+        accessCode: b.accessCode,
+        createdAt: b.createdAt,
+        customer: b.customer_id || 'Customer', // use customer_id for now
+        startTime: '-',        // Placeholder
+        endTime: '-'           // Placeholder
+      }));
+
+      setBookings(normalized);
     } catch (err) {
       console.error('Failed to fetch bookings:', err);
     }
   };
 
-  // Fetch all bikes
   const fetchBikes = async () => {
     try {
-      const response = await axios.get(`${API_BASE}/bikes`);
-      setBikes(response.data);
+      const res = await axios.get(`${API_BASE}/bikes`);
+      setBikes(res.data);
     } catch (err) {
       console.error('Failed to fetch bikes:', err);
     }
@@ -50,7 +64,7 @@ export default function BookingSection() {
     const result = getBikeByBookingRef(lookupRef);
     if (result) {
       alert(
-        `Bike: ${result.bike.model}\nDuration: ${result.booking.startTime} - ${result.booking.endTime}\nAccess Code: ${result.bike.accessCode}`
+        `Bike: ${result.bike?.model || 'N/A'}\nDuration: ${result.booking.startTime} - ${result.booking.endTime}\nAccess Code: ${result.bike?.accessCode || 'N/A'}`
       );
     } else {
       alert('Booking reference not found');
@@ -68,7 +82,7 @@ export default function BookingSection() {
           <div className="mt-4 flex space-x-4">
             <input
               type="text"
-              placeholder="Enter booking reference (e.g., BK001)"
+              placeholder="Enter booking reference (UUID)"
               className="flex-1 p-3 border-2 border-blue-200 rounded-lg focus:border-blue-500 focus:outline-none"
               value={lookupRef}
               onChange={(e) => setLookupRef(e.target.value)}
@@ -103,12 +117,12 @@ export default function BookingSection() {
                   <tr key={booking.id} className="border-b border-blue-100 hover:bg-blue-50">
                     <td className="px-6 py-4 font-mono text-blue-600">{booking.id}</td>
                     <td className="px-6 py-4">{booking.customer}</td>
-                    <td className="px-6 py-4">{bike?.model} ({bike?.type})</td>
-                    <td className="px-6 py-4">{booking.date}</td>
+                    <td className="px-6 py-4">{bike?.model || 'Unknown'} ({bike?.type || 'N/A'})</td>
+                    <td className="px-6 py-4">{new Date(booking.date).toLocaleDateString()}</td>
                     <td className="px-6 py-4">{booking.startTime} - {booking.endTime}</td>
                     <td className="px-6 py-4">
                       <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                        booking.status === 'Active'
+                        booking.status === 'CONFIRMED'
                           ? 'bg-green-100 text-green-800'
                           : 'bg-blue-100 text-blue-800'
                       }`}>

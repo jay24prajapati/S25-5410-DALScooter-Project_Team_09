@@ -9,13 +9,16 @@ export default function OverviewSection({ bookings, tickets }) {
   const [activeBookings, setActiveBookings] = useState(0);
   const [openTickets, setOpenTickets] = useState(0);
 
-  const franchiseId = localStorage.getItem('franchise_id'); // Or get from auth context
-
+  const token = localStorage.getItem('idToken'); // Or get from auth context
+const franchiseId = localStorage.getItem('userId'); // Assuming franchise ID is stored in localStorage
   useEffect(() => {
     const fetchDashboardStats = async () => {
       try {
-        const res = await axios.post(`${API_BASE}/franchise/dashboard`, {
-          franchise_id: franchiseId,
+        const res = await axios.get(`${API_BASE}/franchise/dashboard`, {
+      
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
         });
 
         const bikeStats = res.data.bikeStatistics || {};

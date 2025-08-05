@@ -3,16 +3,17 @@ import axios from 'axios';
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
-export default function BikeManagementSection({
-  bikes,
-  setBikes,
-  showAddBike,
-  setShowAddBike,
-  newBike,
-  setNewBike
-}) {
-  const token = localStorage.getItem('accessToken');
+export default function BikeManagementSection() {
+  const token = localStorage.getItem('idToken');
+  const [bikes, setBikes] = useState([]);
   const [editBike, setEditBike] = useState(null);
+  const [showAddBike, setShowAddBike] = useState(false);
+  const [newBike, setNewBike] = useState({
+    type: 'eBike',
+    dailyRate: '',
+    features: '',
+    count: ''
+  });
 
   useEffect(() => {
     fetchBikes();
@@ -175,6 +176,7 @@ export default function BikeManagementSection({
         ))}
       </div>
 
+      {/* Edit Modal */}
       {editBike && (
         <div className="fixed inset-0 bg-black bg-opacity-40 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-8 w-full max-w-md shadow-xl">
@@ -233,7 +235,7 @@ export default function BikeManagementSection({
         </div>
       )}
 
-      {/* Add Bike Modal (remains as you already implemented) */}
+      {/* Add Bike Modal */}
       {showAddBike && (
         <div className="fixed inset-0 bg-gradient-to-br from-blue-200/60 to-indigo-200/60 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-8 w-full max-w-md mx-4 shadow-xl">

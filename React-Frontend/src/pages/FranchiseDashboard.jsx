@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import OverviewSection from '../components/Franchise/OverviewSection';
 import BikeManagementSection from '../components/Franchise/BikeManagementSection';
 import BookingSection from '../components/Franchise/BookingSection';
@@ -9,28 +9,10 @@ import ChatModal from '../components/Franchise/ChatModal';
 
 export default function FranchiseDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
-
-  const [bikes, setBikes] = useState([
-    { id: 1, type: 'eBike', model: 'EB-001', accessCode: 'A1B2C3', status: 'Available', rate: 15, battery: 85, features: ['Height Adjustment', 'GPS Tracking'] },
-    { id: 2, type: 'Gyroscooter', model: 'GS-002', accessCode: 'D4E5F6', status: 'Rented', rate: 20, battery: 60, features: ['Self-Balancing', 'LED Display'] },
-    { id: 3, type: 'Segway', model: 'SW-003', accessCode: 'G7H8I9', status: 'Available', rate: 25, battery: 90, features: ['Remote Control', 'Anti-theft'] }
-  ]);
-
-  const [bookings, setBookings] = useState([
-    { id: 'BK001', customer: 'John Doe', bikeId: 2, startTime: '09:00', endTime: '12:00', date: '2025-01-29', status: 'Active' },
-    { id: 'BK002', customer: 'Jane Smith', bikeId: 1, startTime: '14:00', endTime: '16:00', date: '2025-01-29', status: 'Completed' }
-  ]);
-
-  const [tickets, setTickets] = useState([
-    { id: 'T001', customer: 'John Doe', issue: 'Bike not starting', priority: 'High', status: 'Open', timestamp: '2025-01-29 10:30' },
-    { id: 'T002', customer: 'Jane Smith', issue: 'Battery drain issue', priority: 'Medium', status: 'In Progress', timestamp: '2025-01-29 11:15' }
-  ]);
+  const [bikes, setBikes] = useState([]);
+  const [tickets, setTickets] = useState([]);
 
   const [showAddBike, setShowAddBike] = useState(false);
-  const [showChat, setShowChat] = useState(false);
-  const [selectedTicket, setSelectedTicket] = useState(null);
-  const [selectedBookingId, setSelectedBookingId] = useState(null); // for chat modal
-
   const [newBike, setNewBike] = useState({
     type: 'eBike',
     model: '',
@@ -38,6 +20,17 @@ export default function FranchiseDashboard() {
     rate: '',
     features: ''
   });
+
+  const [showChat, setShowChat] = useState(false);
+  const [selectedTicket, setSelectedTicket] = useState(null);
+  const [selectedBookingId, setSelectedBookingId] = useState(null);
+
+  useEffect(() => {
+    // Auto-close chat when tab changes
+    setShowChat(false);
+    setSelectedBookingId(null);
+    setSelectedTicket(null);
+  }, [activeTab]);
 
   const handleAddBike = (e) => {
     e.preventDefault();
@@ -60,15 +53,6 @@ export default function FranchiseDashboard() {
     setBikes(bikes.map(bike =>
       bike.id === bikeId ? { ...bike, rate: newRate } : bike
     ));
-  };
-
-  const getBikeByBookingRef = (bookingRef) => {
-    const booking = bookings.find(b => b.id === bookingRef);
-    if (booking) {
-      const bike = bikes.find(b => b.id === booking.bikeId);
-      return { booking, bike };
-    }
-    return null;
   };
 
   const tabs = [
@@ -127,11 +111,12 @@ export default function FranchiseDashboard() {
           ))}
         </div>
 
-        {/* Content */}
+        {/* Tab Content */}
         <div className="mb-16">
           {activeTab === 'overview' && (
-            <OverviewSection bikes={bikes} bookings={bookings} tickets={tickets} />
+            <OverviewSection bookings={[]} tickets={tickets} />
           )}
+
           {activeTab === 'bikes' && (
             <BikeManagementSection
               bikes={bikes}
@@ -144,13 +129,9 @@ export default function FranchiseDashboard() {
               updateBikeRate={updateBikeRate}
             />
           )}
-          {activeTab === 'bookings' && (
-            <BookingSection
-              bookings={bookings}
-              bikes={bikes}
-              getBikeByBookingRef={getBikeByBookingRef}
-            />
-          )}
+
+          {activeTab === 'bookings' && <BookingSection />}
+
           {activeTab === 'support' && (
             <SupportSection
               tickets={tickets}
@@ -160,14 +141,20 @@ export default function FranchiseDashboard() {
               setShowChat={setShowChat}
             />
           )}
+
           {activeTab === 'messages' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <CustomerList />
               <ConversationList onOpenChat={(bookingId) => setSelectedBookingId(bookingId)} />
             </div>
           )}
+
+          {/* Chat Modal (global) */}
           {selectedBookingId && (
-            <ChatModal bookingId={selectedBookingId} onClose={() => setSelectedBookingId(null)} />
+            <ChatModal
+              bookingId={selectedBookingId}
+              onClose={() => setSelectedBookingId(null)}
+            />
           )}
         </div>
       </div>

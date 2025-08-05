@@ -7,25 +7,30 @@ Parameters:
     Type: String
     Default: 'DALScooter'
     Description: 'Project name for resource naming'
+
   Environment:
     Type: String
     Default: 'dev'
     AllowedValues: [dev, prod]
     Description: 'Environment name'
-  
+
   # Import from Module 1 (Auth Module)
   UsersTableName:
     Type: String
     Description: 'Users table name from Module 1'
+
   UserSessionsTableName:
     Type: String
     Description: 'User Sessions table name from Module 1'
+
   APIGatewayId:
     Type: String
     Description: 'API Gateway ID from Module 1'
+
   APIGatewayRootResourceId:
     Type: String
     Description: 'API Gateway Root Resource ID from Module 1'
+
   CognitoUserPoolId:
     Type: String
     Description: 'Cognito User Pool ID from Module 1'
@@ -329,16 +334,21 @@ Resources:
           import os
           from datetime import datetime, date
           from boto3.dynamodb.conditions import Key
-          
+
           dynamodb = boto3.resource('dynamodb')
-          
+
           def lambda_handler(event, context):
               print(f"Public bikes event: {json.dumps(event)}")
+              
               try:
                   http_method = event.get('httpMethod', 'GET')
                   path = event.get('path', '')
                   path_params = event.get('pathParameters') or {}
                   query_params = event.get('queryStringParameters') or {}
+                  
+                  # Handle OPTIONS requests for CORS
+                  if http_method == 'OPTIONS':
+                      return response_with_cors(200, {})
                   
                   if path == '/bikes' and http_method == 'GET':
                       return get_bikes(query_params)
@@ -351,7 +361,7 @@ Resources:
               except Exception as e:
                   print(f"Public bikes error: {str(e)}")
                   return response_with_cors(500, {'error': 'Internal server error'})
-          
+
           def get_bikes(query_params):
               try:
                   booking_date = query_params.get('date', date.today().isoformat())
@@ -387,7 +397,6 @@ Resources:
                       
                       total_count = int(bike['count'])
                       booked_count = 0
-                      
                       if 'Item' in inventory_response:
                           booked_count = int(inventory_response['Item'].get('booked_count', 0))
                       
@@ -402,7 +411,6 @@ Resources:
                           'availableCount': max(0, available_count),
                           'available': available_count > 0
                       }
-                      
                       result.append(bike_data)
                   
                   return response_with_cors(200, result)
@@ -410,7 +418,7 @@ Resources:
               except Exception as e:
                   print(f"Error getting bikes: {str(e)}")
                   return response_with_cors(500, {'error': 'Database query failed'})
-          
+
           def get_bike_feedback(bike_id):
               try:
                   if not bike_id:
@@ -419,7 +427,6 @@ Resources:
                   # Check if bike exists
                   bikes_table = dynamodb.Table(os.environ['BIKES_TABLE'])
                   bike_response = bikes_table.get_item(Key={'bike_id': bike_id})
-                  
                   if 'Item' not in bike_response:
                       return response_with_cors(404, {'error': 'Bike not found'})
                   
@@ -445,6 +452,7 @@ Resources:
                       }
                       feedback_list.append(feedback_item)
                       total_rating += int(item['rating'])
+                      
                       sentiment = item.get('sentiment', 'neutral')
                       if sentiment in sentiment_counts:
                           sentiment_counts[sentiment] += 1
@@ -465,7 +473,7 @@ Resources:
               except Exception as e:
                   print(f"Error getting bike feedback: {str(e)}")
                   return response_with_cors(500, {'error': 'Database query failed'})
-          
+
           def response_with_cors(status_code, body):
               return {
                   'statusCode': status_code,
@@ -509,18 +517,23 @@ Resources:
           from boto3.dynamodb.conditions import Key, Attr
           import random
           import string
-          
+
           dynamodb = boto3.resource('dynamodb')
           sqs = boto3.client('sqs')
           sns = boto3.client('sns')
           comprehend = boto3.client('comprehend')
-          
+
           def lambda_handler(event, context):
               print(f"Unified API event: {json.dumps(event)}")
+              
               try:
                   http_method = event.get('httpMethod', 'GET')
                   path = event.get('path', '')
                   path_params = event.get('pathParameters') or {}
+                  
+                  # Handle OPTIONS requests for CORS
+                  if http_method == 'OPTIONS':
+                      return response_with_cors(200, {})
                   
                   # Extract user info from Cognito context
                   user_id, user_type = extract_user_info_from_context(event)
@@ -582,7 +595,7 @@ Resources:
                   import traceback
                   print(f"Traceback: {traceback.format_exc()}")
                   return response_with_cors(500, {'error': 'Internal server error'})
-          
+
           # CUSTOMER FUNCTIONS
           def create_booking(event, customer_id):
               try:
@@ -624,7 +637,6 @@ Resources:
                   
                   total_count = int(bike['count'])
                   booked_count = 0
-                  
                   if 'Item' in inventory_response:
                       booked_count = int(inventory_response['Item'].get('booked_count', 0))
                   
@@ -658,7 +670,7 @@ Resources:
                       'bike_id': bike_id,
                       'franchise_id': franchise_id,
                       'date': booking_date,
-                      'status': 'CONFIRMED',  # Automatically confirmed
+                      'status': 'CONFIRMED', # Automatically confirmed
                       'accessCode': access_code,
                       'dailyRate': bike['dailyRate'],
                       'createdAt': datetime.now().isoformat(),
@@ -707,7 +719,7 @@ Resources:
               except Exception as e:
                   print(f"Error creating booking: {str(e)}")
                   return response_with_cors(500, {'error': 'Booking creation failed'})
-          
+
           def get_customer_bookings(customer_id):
               try:
                   bookings_table = dynamodb.Table(os.environ['BOOKINGS_TABLE'])
@@ -746,7 +758,7 @@ Resources:
               except Exception as e:
                   print(f"Error getting customer bookings: {str(e)}")
                   return response_with_cors(500, {'error': 'Database query failed'})
-          
+
           def cancel_booking(booking_id, customer_id):
               try:
                   if not booking_id:
@@ -823,7 +835,7 @@ Resources:
               except Exception as e:
                   print(f"Error cancelling booking: {str(e)}")
                   return response_with_cors(500, {'error': 'Cancellation failed'})
-          
+
           def get_customer_profile(customer_id):
               try:
                   users_table = dynamodb.Table(os.environ['USERS_TABLE'])
@@ -847,7 +859,7 @@ Resources:
               except Exception as e:
                   print(f"Error getting customer profile: {str(e)}")
                   return response_with_cors(500, {'error': 'Profile retrieval failed'})
-          
+
           # FRANCHISE FUNCTIONS
           def create_bike(event, franchise_id):
               try:
@@ -902,13 +914,14 @@ Resources:
               except Exception as e:
                   print(f"Error creating bike: {str(e)}")
                   return response_with_cors(500, {'error': 'Bike creation failed'})
-          
+
           def update_bike(event, bike_id, franchise_id):
               try:
                   if not bike_id:
                       return response_with_cors(400, {'error': 'bike_id is required'})
                   
                   body = json.loads(event['body']) if event.get('body') else {}
+                  
                   bikes_table = dynamodb.Table(os.environ['BIKES_TABLE'])
                   
                   # Verify bike exists and belongs to franchise
@@ -923,7 +936,6 @@ Resources:
                   # Prepare update expression
                   update_expressions = []
                   expression_values = {':updated': datetime.now().isoformat()}
-                  
                   old_count = int(bike.get('count', 0))
                   new_count = old_count
                   
@@ -996,7 +1008,7 @@ Resources:
               except Exception as e:
                   print(f"Error updating bike: {str(e)}")
                   return response_with_cors(500, {'error': 'Bike update failed'})
-          
+
           def delete_bike(bike_id, franchise_id):
               try:
                   if not bike_id:
@@ -1055,7 +1067,7 @@ Resources:
               except Exception as e:
                   print(f"Error deleting bike: {str(e)}")
                   return response_with_cors(500, {'error': 'Bike deletion failed'})
-          
+
           def get_franchise_bookings(franchise_id, query_params):
               try:
                   status_filter = query_params.get('status')
@@ -1116,7 +1128,7 @@ Resources:
               except Exception as e:
                   print(f"Error getting franchise bookings: {str(e)}")
                   return response_with_cors(500, {'error': 'Database query failed'})
-          
+
           def get_franchise_customers(franchise_id):
               try:
                   # Get unique customers who have bookings for this franchise
@@ -1183,7 +1195,7 @@ Resources:
               except Exception as e:
                   print(f"Error getting franchise customers: {str(e)}")
                   return response_with_cors(500, {'error': 'Database query failed'})
-          
+
           def get_franchise_dashboard(franchise_id):
               try:
                   # Get franchise stats
@@ -1216,7 +1228,7 @@ Resources:
                       
                       # Monthly revenue (only for confirmed bookings)
                       if status == 'CONFIRMED':
-                          month = booking['date'][:7]  # YYYY-MM
+                          month = booking['date'][:7] # YYYY-MM
                           monthly_revenue[month] = monthly_revenue.get(month, 0) + float(booking.get('dailyRate', 0))
                   
                   # Bike statistics
@@ -1251,7 +1263,7 @@ Resources:
               except Exception as e:
                   print(f"Error getting franchise dashboard: {str(e)}")
                   return response_with_cors(500, {'error': 'Database query failed'})
-          
+
           def submit_feedback(event, bike_id, customer_id):
               try:
                   body = json.loads(event['body']) if event.get('body') else {}
@@ -1273,7 +1285,6 @@ Resources:
                       return response_with_cors(400, {'error': 'Booking not found'})
                   
                   booking = booking_response['Item']
-                  
                   if booking['customer_id'] != customer_id:
                       return response_with_cors(403, {'error': 'Cannot provide feedback for booking not owned by you'})
                   
@@ -1322,7 +1333,7 @@ Resources:
               except Exception as e:
                   print(f"Error submitting feedback: {str(e)}")
                   return response_with_cors(500, {'error': 'Feedback submission failed'})
-          
+
           def send_message(event, user_id, user_type):
               try:
                   body = json.loads(event['body']) if event.get('body') else {}
@@ -1377,7 +1388,7 @@ Resources:
               except Exception as e:
                   print(f"Error sending message: {str(e)}")
                   return response_with_cors(500, {'error': 'Message sending failed'})
-          
+
           def get_booking_messages(booking_id, user_id, user_type):
               try:
                   if not booking_id:
@@ -1407,7 +1418,7 @@ Resources:
                   messages_response = messages_table.query(
                       IndexName='BookingMessages',
                       KeyConditionExpression=Key('booking_id').eq(booking_id),
-                      ScanIndexForward=True  # Oldest messages first
+                      ScanIndexForward=True # Oldest messages first
                   )
                   
                   messages = []
@@ -1447,7 +1458,7 @@ Resources:
               except Exception as e:
                   print(f"Error getting booking messages: {str(e)}")
                   return response_with_cors(500, {'error': 'Database query failed'})
-          
+
           def get_customer_conversations(customer_id):
               try:
                   messages_table = dynamodb.Table(os.environ['MESSAGES_TABLE'])
@@ -1493,7 +1504,7 @@ Resources:
               except Exception as e:
                   print(f"Error getting customer conversations: {str(e)}")
                   return response_with_cors(500, {'error': 'Database query failed'})
-          
+
           def get_franchise_conversations(franchise_id):
               try:
                   # Get all unique customers who have messaged this franchise
@@ -1551,7 +1562,7 @@ Resources:
               except Exception as e:
                   print(f"Error getting franchise conversations: {str(e)}")
                   return response_with_cors(500, {'error': 'Database query failed'})
-          
+
           # UTILITY FUNCTIONS
           def analyze_sentiment(comment, rating):
               try:
@@ -1579,10 +1590,10 @@ Resources:
                       return 'neutral'
                   else:
                       return 'negative'
-          
+
           def generate_access_code():
               return ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
-          
+
           def send_notification(notification_data):
               try:
                   sns.publish(
@@ -1593,7 +1604,7 @@ Resources:
                   print(f"Notification sent: {notification_data}")
               except Exception as e:
                   print(f"Error sending notification: {str(e)}")
-          
+
           def send_inventory_update(update_data):
               try:
                   sns.publish(
@@ -1604,7 +1615,7 @@ Resources:
                   print(f"Inventory update sent: {update_data}")
               except Exception as e:
                   print(f"Error sending inventory update: {str(e)}")
-          
+
           def update_future_inventory(bike_id, new_count):
               try:
                   inventory_table = dynamodb.Table(os.environ['BIKE_INVENTORY_TABLE'])
@@ -1629,10 +1640,10 @@ Resources:
                               ':now': datetime.now().isoformat()
                           }
                       )
-                  
+                      
               except Exception as e:
                   print(f"Error updating future inventory: {str(e)}")
-          
+
           def extract_user_info_from_context(event):
               try:
                   request_context = event.get('requestContext', {})
@@ -1657,7 +1668,7 @@ Resources:
               except Exception as e:
                   print(f"Error extracting user info: {str(e)}")
                   return None, None
-          
+
           def response_with_cors(status_code, body):
               return {
                   'statusCode': status_code,
@@ -1690,10 +1701,10 @@ Resources:
           import boto3
           import os
           from datetime import datetime, date
-          
+
           dynamodb = boto3.resource('dynamodb')
           sns = boto3.client('sns')
-          
+
           def lambda_handler(event, context):
               print(f"Inventory sync event: {json.dumps(event)}")
               
@@ -1708,7 +1719,7 @@ Resources:
               except Exception as e:
                   print(f"Error in inventory sync: {str(e)}")
                   return {'statusCode': 500, 'body': 'Inventory sync failed'}
-          
+
           def process_bike_change(record):
               try:
                   event_name = record['eventName']
@@ -1741,7 +1752,7 @@ Resources:
                               'new_count': new_count,
                               'timestamp': datetime.now().isoformat()
                           })
-                      
+                          
                   elif event_name == 'REMOVE':
                       # Bike removed/deactivated
                       bike_data = record['dynamodb']['OldImage']
@@ -1759,7 +1770,7 @@ Resources:
                       
               except Exception as e:
                   print(f"Error processing bike change: {str(e)}")
-          
+
           def send_real_time_update(update_data):
               try:
                   sns.publish(
@@ -1870,7 +1881,7 @@ Resources:
       ParentId: !Ref FranchiseBookingsResource
       PathPart: '{booking_id}'
 
-  # NEW: Franchise Booking Messages Resource  
+  # NEW: Franchise Booking Messages Resource
   FranchiseBookingMessagesResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -1914,6 +1925,36 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PublicBikesFunction.Arn}/invocations'
 
+  # OPTIONS method for /bikes
+  BikesOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref BikesResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: 'Empty'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
   BikeFeedbackGetMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -1927,6 +1968,36 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PublicBikesFunction.Arn}/invocations'
+
+  # OPTIONS method for /bikes/{bike_id}/feedback
+  BikeFeedbackOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref BikeFeedbackResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: 'Empty'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
 
   # Customer Methods (Authentication Required)
   BookingsPostMethod:
@@ -1955,6 +2026,36 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
 
+  # OPTIONS method for /bookings
+  BookingsOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref BookingsResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: 'Empty'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
   BookingDeleteMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -1970,6 +2071,36 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
 
+  # OPTIONS method for /bookings/{booking_id}
+  BookingIdOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref BookingIdResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: 'Empty'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
   CustomerProfileGetMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -1982,6 +2113,36 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
+
+  # OPTIONS method for /customers/profile
+  CustomerProfileOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref CustomerProfileResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: 'Empty'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
 
   BikeFeedbackPostMethod:
     Type: AWS::ApiGateway::Method
@@ -2011,6 +2172,36 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
 
+  # OPTIONS method for /messages
+  MessagesOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref MessagesResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: 'Empty'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
   # Customer: Get full conversation for a booking
   BookingMessagesGetMethod:
     Type: AWS::ApiGateway::Method
@@ -2027,6 +2218,36 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
 
+  # OPTIONS method for /bookings/{booking_id}/messages
+  BookingMessagesOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref BookingMessagesResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: 'Empty'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
   MessageConversationsGetMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -2039,6 +2260,36 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
+
+  # OPTIONS method for /messages/conversations
+  MessageConversationsOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref MessageConversationsResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: 'Empty'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
 
   # Franchise Methods (Authentication Required)
   BikesPostMethod:
@@ -2084,6 +2335,37 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
 
+  # OPTIONS method for /bikes/{bike_id}
+  BikeIdOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref BikeIdResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: 'Empty'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+
   FranchiseBookingsGetMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -2096,6 +2378,36 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
+
+  # OPTIONS method for /franchise/bookings
+  FranchiseBookingsOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref FranchiseBookingsResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: 'Empty'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
 
   # NEW: Franchise: Get full conversation for a booking by booking_id
   FranchiseBookingMessagesGetMethod:
@@ -2113,6 +2425,66 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
 
+  # OPTIONS method for /franchise/bookings/{booking_id}/messages
+  FranchiseBookingMessagesOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref FranchiseBookingMessagesResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: 'Empty'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # OPTIONS method for /franchise/bookings/{booking_id}
+  FranchiseBookingIdOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref FranchiseBookingIdResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: 'Empty'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
   FranchiseCustomersGetMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -2125,6 +2497,36 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
+
+  # OPTIONS method for /franchise/customers
+  FranchiseCustomersOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref FranchiseCustomersResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: 'Empty'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
 
   FranchiseDashboardGetMethod:
     Type: AWS::ApiGateway::Method
@@ -2139,6 +2541,36 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
 
+  # OPTIONS method for /franchise/dashboard
+  FranchiseDashboardOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref FranchiseDashboardResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: 'Empty'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
   FranchiseConversationsGetMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -2152,7 +2584,98 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
 
+  # OPTIONS method for /franchise/conversations
+  FranchiseConversationsOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref FranchiseConversationsResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: 'Empty'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # OPTIONS method for /franchise
+  FranchiseOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref FranchiseResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: 'Empty'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # OPTIONS method for /customers
+  CustomersOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref CustomersResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: 'Empty'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
   # LAMBDA PERMISSIONS
+
   PublicBikesLambdaPermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -2170,6 +2693,7 @@ Resources:
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${APIGatewayId}/*/*'
 
   # DynamoDB STREAM EVENT SOURCE MAPPING
+
   BikesTableStreamMapping:
     Type: AWS::Lambda::EventSourceMapping
     Properties:

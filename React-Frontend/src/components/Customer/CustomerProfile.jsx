@@ -4,14 +4,13 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE;
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 
-
 const CustomerProfile = () => {
   const [profile, setProfile] = useState(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('idToken');
         const res = await axios.get(`${API_BASE_URL}/customers/profile`, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -39,5 +38,6 @@ const CustomerProfile = () => {
     </div>
   );
 };
+
 
 export default CustomerProfile;

@@ -1,38 +1,44 @@
+// src/components/Customer/CustomerChatModal.jsx
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE;
+const API_BASE = import.meta.env.VITE_API_BASE;
 
-export default function BookingMessages({ bookingId, onClose }) {
+export default function CustomerChatModal({ bookingId, onClose }) {
   const [messages, setMessages] = useState([]);
   const [bookingInfo, setBookingInfo] = useState(null);
-  const [newMessage, setNewMessage] = useState('');
+  const [newMsg, setNewMsg] = useState('');
   const token = localStorage.getItem('idToken');
 
   const fetchMessages = async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/bookings/${bookingId}/messages`, {
+      const res = await axios.get(`${API_BASE}/bookings/${bookingId}/messages`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setMessages(res.data.messages || []);
       setBookingInfo(res.data.booking_info || null);
     } catch (err) {
-      console.error('Error fetching messages:', err);
+      console.error('Failed to fetch messages:', err);
     }
   };
 
   const sendMessage = async () => {
-    if (!newMessage.trim()) return;
+    if (!newMsg.trim()) return;
     try {
       await axios.post(
-        `${API_BASE_URL}/messages`,
-        { booking_id: bookingId, content: newMessage },
-        { headers: { Authorization: `Bearer ${token}` } }
+        `${API_BASE}/messages`,
+        {
+          booking_id: bookingId,
+          content: newMsg
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
       );
-      setNewMessage('');
-      fetchMessages(); // refresh
+      setNewMsg('');
+      fetchMessages();
     } catch (err) {
-      console.error('Error sending message:', err);
+      console.error('Failed to send message:', err);
     }
   };
 
@@ -43,7 +49,6 @@ export default function BookingMessages({ bookingId, onClose }) {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
       <div className="bg-white w-full max-w-lg rounded-xl shadow-xl p-6">
-        {/* Header */}
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-bold">
             Chat with Franchise
@@ -51,16 +56,14 @@ export default function BookingMessages({ bookingId, onClose }) {
           <button onClick={onClose} className="text-gray-500 hover:text-red-500 text-xl">&times;</button>
         </div>
 
-        {/* Booking Info */}
         {bookingInfo && (
           <div className="text-sm text-gray-600 mb-4">
-            <p><strong>Bike:</strong> {bookingInfo.bike_type || 'Unknown'}</p>
+            <p><strong>Bike:</strong> {bookingInfo.bike_type}</p>
             <p><strong>Date:</strong> {bookingInfo.date}</p>
             <p><strong>Status:</strong> {bookingInfo.status}</p>
           </div>
         )}
 
-        {/* Messages */}
         <div className="h-64 overflow-y-auto space-y-2 mb-4 pr-2">
           {messages.map(msg => (
             <div
@@ -79,12 +82,11 @@ export default function BookingMessages({ bookingId, onClose }) {
           ))}
         </div>
 
-        {/* Input */}
         <div className="flex gap-2">
           <input
             type="text"
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
+            value={newMsg}
+            onChange={(e) => setNewMsg(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
             className="flex-1 border p-2 rounded-lg"
             placeholder="Type your message..."
