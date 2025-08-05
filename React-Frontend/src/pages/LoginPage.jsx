@@ -72,8 +72,7 @@ export default function LoginPage() {
       });
 
       const data = res.data;
-      const userType = data.userType?.toLowerCase(); // Normalize
-
+      const userType = data.userType?.toLowerCase(); 
       console.log('Login success! Received tokens:', {
         hasAccessToken: !!data.accessToken,
         hasIdToken: !!data.idToken,

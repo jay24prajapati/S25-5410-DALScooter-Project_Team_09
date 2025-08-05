@@ -98,7 +98,6 @@ export default function CustomerDashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-      {/* Modern Header */}
       <header className="bg-white/80 backdrop-blur-lg shadow-lg border-b border-white/20 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex justify-between items-center">
@@ -138,7 +137,6 @@ export default function CustomerDashboard() {
         </div>
       </header>
 
-      {/* Enhanced Tab Navigation */}
       <nav className="bg-white/60 backdrop-blur-sm border-b border-white/20 sticky top-[88px] z-40">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex space-x-2 overflow-x-auto scrollbar-hide">
@@ -147,7 +145,6 @@ export default function CustomerDashboard() {
                 key={tab.key}
                 onClick={() => {
                   setActiveTab(tab.key);
-                  // Reset chat when switching away from messages tab
                   if (tab.key !== 'messages') {
                     setChatBookingId(null);
                   }
@@ -166,11 +163,9 @@ export default function CustomerDashboard() {
         </div>
       </nav>
 
-      {/* Main Content with improved spacing */}
       <main className="max-w-7xl mx-auto px-6 py-8">
         {activeTab === 'booking' && (
           <div className="space-y-8">
-            {/* Date Selector */}
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-white/20">
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                 <div className="flex items-center space-x-3">
@@ -294,10 +289,8 @@ export default function CustomerDashboard() {
           </div>
         )}
 
-        {/* UPDATED MESSAGES SECTION - Fixed Layout */}
         {activeTab === 'messages' && (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 h-[600px]">
-            {/* Conversations List - Fixed Height Container */}
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 flex flex-col overflow-hidden">
               <div className="flex items-center space-x-3 p-6 border-b border-gray-200 flex-shrink-0">
                 <span className="text-2xl"></span>
@@ -311,7 +304,6 @@ export default function CustomerDashboard() {
               </div>
             </div>
 
-            {/* Chat Area - Fixed Height Container */}
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 flex flex-col overflow-hidden">
               {chatBookingId ? (
                 <>
