@@ -119,7 +119,7 @@ export default function BookingSection() {
           <tr key={booking.id} className="border-b border-blue-100 hover:bg-blue-50">
             <td className="px-6 py-4 font-mono text-blue-600">{booking.id}</td>
             <td className="px-6 py-4 text-sm">{booking.customerId}</td>
-            <td className="px-6 py-4">{new Date(booking.date).toLocaleDateString()}</td>
+<td className="px-6 py-4">{booking.date}</td>
             <td className="px-6 py-4">${booking.rate.toFixed(2)}</td>
             <td className="px-6 py-4 font-mono text-blue-700">{booking.accessCode}</td>
             <td className="px-6 py-4">

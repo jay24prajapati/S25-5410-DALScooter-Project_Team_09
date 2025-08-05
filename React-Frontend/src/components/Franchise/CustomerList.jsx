@@ -26,9 +26,10 @@ export default function CustomerList() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-2 text-sm text-gray-700">
               <div><strong>Total Bookings:</strong> {c.totalBookings}</div>
               <div><strong>Total Revenue:</strong> ${c.totalRevenue.toFixed(2)}</div>
-              <div><strong>Registered:</strong> {new Date(c.registrationDate).toLocaleDateString()}</div>
-              <div><strong>First Booking:</strong> {new Date(c.firstBooking).toLocaleDateString()}</div>
-              <div><strong>Last Booking:</strong> {new Date(c.lastBooking).toLocaleDateString()}</div>
+              <div><strong>Registered:</strong> {c.registrationDate}</div>
+<div><strong>First Booking:</strong> {c.firstBooking}</div>
+<div><strong>Last Booking:</strong> {c.lastBooking}</div>
+
               <div>
                 <strong>Status Breakdown:</strong>
                 <ul className="list-disc list-inside ml-2 text-xs text-gray-600">

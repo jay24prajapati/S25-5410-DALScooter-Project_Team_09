@@ -133,7 +133,7 @@ export default function MyBookings() {
                       {bike?.model || 'Unknown'} ({bike?.type || 'N/A'})
                     </p>
                     <p className="text-sm text-gray-500">
-                      Date: {format(new Date(b.date), 'yyyy-MM-dd')}
+Date: {b.date}
                     </p>
                     <p className="text-sm text-gray-500">Rate: ${b.dailyRate}</p>
                   </div>

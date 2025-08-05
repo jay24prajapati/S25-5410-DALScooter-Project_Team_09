@@ -37,7 +37,7 @@ export default function CustomerConversationList({ onOpenChat }) {
               Booking: {b.booking_id.slice(0, 8)}
             </div>
             <div className="text-xs text-gray-600">
-              Date: {new Date(b.date).toLocaleDateString()} | Rate: ${b.dailyRate}
+              Date: {b.date} | Rate: ${b.dailyRate}
             </div>
           </li>
         ))}
