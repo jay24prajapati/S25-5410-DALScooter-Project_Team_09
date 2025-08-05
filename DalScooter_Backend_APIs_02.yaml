@@ -165,6 +165,8 @@ Resources:
           AttributeType: S
         - AttributeName: franchise_id
           AttributeType: S
+        - AttributeName: parent_feedback_id
+          AttributeType: S
       KeySchema:
         - AttributeName: feedback_id
           KeyType: HASH
@@ -188,6 +190,14 @@ Resources:
         - IndexName: FranchiseFeedback
           KeySchema:
             - AttributeName: franchise_id
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: FeedbackReplies
+          KeySchema:
+            - AttributeName: parent_feedback_id
               KeyType: HASH
             - AttributeName: createdAt
               KeyType: RANGE
@@ -415,43 +425,68 @@ Resources:
               try:
                   if not bike_id:
                       return response_with_cors(400, {'error': 'bike_id is required'})
-                  
+
                   # Check if bike exists
                   bikes_table = dynamodb.Table(os.environ['BIKES_TABLE'])
                   bike_response = bikes_table.get_item(Key={'bike_id': bike_id})
-                  
+
                   if 'Item' not in bike_response:
                       return response_with_cors(404, {'error': 'Bike not found'})
-                  
+
                   feedback_table = dynamodb.Table(os.environ['FEEDBACK_TABLE'])
                   feedback_response = feedback_table.query(
                       IndexName='BikeFeedback',
                       KeyConditionExpression=Key('bike_id').eq(bike_id),
+                      FilterExpression='#type = :type',
+                      ExpressionAttributeNames={'#type': 'type'},
+                      ExpressionAttributeValues={':type': 'CUSTOMER_FEEDBACK'},
                       ScanIndexForward=False,
                       Limit=50
                   )
-                  
+
                   feedback_list = []
                   total_rating = 0
                   sentiment_counts = {'positive': 0, 'neutral': 0, 'negative': 0}
-                  
+
                   for item in feedback_response['Items']:
+                      # Get franchise reply if exists
+                      reply_response = feedback_table.query(
+                          IndexName='FeedbackReplies',
+                          KeyConditionExpression=Key('parent_feedback_id').eq(item['feedback_id']),
+                          FilterExpression='#type = :type',
+                          ExpressionAttributeNames={'#type': 'type'},
+                          ExpressionAttributeValues={':type': 'FRANCHISE_REPLY'}
+                      )
+
+                      franchise_reply = None
+                      if reply_response['Items']:
+                          reply = reply_response['Items'][0]
+                          franchise_reply = {
+                              'comment': reply['comment'],
+                              'createdAt': reply['createdAt'],
+                              'updatedAt': reply.get('updatedAt', reply['createdAt'])
+                          }
+
                       feedback_item = {
                           'feedback_id': item['feedback_id'],
+                          'user_id': item["customer_id"],  
                           'rating': int(item['rating']),
                           'comment': item.get('comment', ''),
                           'sentiment': item.get('sentiment', 'neutral'),
-                          'createdAt': item['createdAt']
+                          'createdAt': item['createdAt'],
+                          'updatedAt': item.get('updatedAt', item['createdAt']),
+                          'franchise_reply': franchise_reply
                       }
+
                       feedback_list.append(feedback_item)
                       total_rating += int(item['rating'])
                       sentiment = item.get('sentiment', 'neutral')
                       if sentiment in sentiment_counts:
                           sentiment_counts[sentiment] += 1
-                  
+
                   average_rating = round(total_rating / len(feedback_list), 1) if feedback_list else 0
                   total_feedback = len(feedback_list)
-                  
+
                   return response_with_cors(200, {
                       'bike_id': bike_id,
                       'feedback': feedback_list,
@@ -461,11 +496,11 @@ Resources:
                           'sentimentBreakdown': sentiment_counts
                       }
                   })
-                  
+
               except Exception as e:
                   print(f"Error getting bike feedback: {str(e)}")
                   return response_with_cors(500, {'error': 'Database query failed'})
-          
+
           def response_with_cors(status_code, body):
               return {
                   'statusCode': status_code,
@@ -505,30 +540,34 @@ Resources:
           import boto3
           import uuid
           import os
+          import traceback
           from datetime import datetime, timedelta, date
           from boto3.dynamodb.conditions import Key, Attr
           import random
           import string
-          
+
           dynamodb = boto3.resource('dynamodb')
           sqs = boto3.client('sqs')
           sns = boto3.client('sns')
           comprehend = boto3.client('comprehend')
-          
+
           def lambda_handler(event, context):
               print(f"Unified API event: {json.dumps(event)}")
+        
               try:
                   http_method = event.get('httpMethod', 'GET')
                   path = event.get('path', '')
                   path_params = event.get('pathParameters') or {}
                   
+                  print(f"Method: {http_method}, Path: {path}, Path Params: {path_params}")
+                  
                   # Extract user info from Cognito context
                   user_id, user_type = extract_user_info_from_context(event)
                   if not user_id:
                       return response_with_cors(401, {'error': 'Authentication required'})
-                  
+
                   print(f"User: {user_id}, Type: {user_type}, Path: {path}, Method: {http_method}")
-                  
+
                   # CUSTOMER ENDPOINTS
                   if user_type == 'customer':
                       if path == '/bookings' and http_method == 'POST':
@@ -546,11 +585,15 @@ Resources:
                       elif '/bikes/' in path and path.endswith('/feedback') and http_method == 'POST':
                           bike_id = path_params.get('bike_id')
                           return submit_feedback(event, bike_id, user_id)
+                      elif '/bikes/' in path and '/feedback/' in path and http_method == 'PUT' and 'feedback_id' in path_params:
+                          # NEW: Customer edit feedback - path pattern: /bikes/{bike_id}/feedback/{feedback_id}
+                          feedback_id = path_params.get('feedback_id')
+                          return edit_customer_feedback(event, feedback_id, user_id)
                       elif path == '/messages' and http_method == 'POST':
                           return send_message(event, user_id, user_type)
                       elif path == '/messages/conversations' and http_method == 'GET':
                           return get_customer_conversations(user_id)
-                  
+
                   # FRANCHISE ENDPOINTS
                   elif user_type == 'franchise':
                       if path == '/bikes' and http_method == 'POST':
@@ -570,18 +613,32 @@ Resources:
                           return get_franchise_customers(user_id)
                       elif path == '/franchise/dashboard' and http_method == 'GET':
                           return get_franchise_dashboard(user_id)
+                      elif path == '/franchise/feedback' and http_method == 'GET':
+                          # NEW: Get all feedback for franchise
+                          return get_franchise_feedback(user_id, event.get('queryStringParameters', {}))
+                      elif '/franchise/feedback/' in path and path.endswith('/reply') and http_method == 'POST':
+                          # NEW: Franchise reply to feedback
+                          feedback_id = path_params.get('feedback_id')
+                          return reply_to_feedback(event, feedback_id, user_id)
+                      elif '/franchise/feedback/replies/' in path and http_method == 'PUT':
+                          # NEW: Franchise edit reply
+                          reply_id = path_params.get('reply_id')
+                          return edit_franchise_reply(event, reply_id, user_id)
                       elif path == '/messages' and http_method == 'POST':
                           return send_message(event, user_id, user_type)
                       elif path == '/franchise/conversations' and http_method == 'GET':
                           return get_franchise_conversations(user_id)
-                  
+
                   return response_with_cors(404, {'error': 'Endpoint not found or access denied'})
-                  
+
               except Exception as e:
                   print(f"Unified API error: {str(e)}")
-                  import traceback
+                  print(f"Request path: {path}")
+                  print(f"HTTP method: {http_method}")
+                  print(f"Path parameters: {path_params}")
                   print(f"Traceback: {traceback.format_exc()}")
                   return response_with_cors(500, {'error': 'Internal server error'})
+
           
           # CUSTOMER FUNCTIONS
           def create_booking(event, customer_id):
@@ -1258,31 +1315,31 @@ Resources:
                   booking_id = body.get('booking_id', '').strip()
                   rating = body.get('rating')
                   comment = body.get('comment', '').strip()
-                  
+
                   if not booking_id or rating is None:
                       return response_with_cors(400, {'error': 'booking_id and rating are required'})
-                  
+
                   if not isinstance(rating, int) or rating < 1 or rating > 5:
                       return response_with_cors(400, {'error': 'Rating must be an integer between 1 and 5'})
-                  
+
                   # Verify booking exists and belongs to customer
                   bookings_table = dynamodb.Table(os.environ['BOOKINGS_TABLE'])
                   booking_response = bookings_table.get_item(Key={'booking_id': booking_id})
-                  
+
                   if 'Item' not in booking_response:
                       return response_with_cors(400, {'error': 'Booking not found'})
-                  
+
                   booking = booking_response['Item']
-                  
+
                   if booking['customer_id'] != customer_id:
                       return response_with_cors(403, {'error': 'Cannot provide feedback for booking not owned by you'})
-                  
+
                   if booking['bike_id'] != bike_id:
                       return response_with_cors(400, {'error': 'Booking is not for this bike'})
-                  
+
                   if booking['status'] != 'CONFIRMED':
                       return response_with_cors(400, {'error': 'Can only provide feedback for confirmed bookings'})
-                  
+
                   # Check if feedback already exists
                   feedback_table = dynamodb.Table(os.environ['FEEDBACK_TABLE'])
                   existing_feedback = feedback_table.query(
@@ -1291,13 +1348,13 @@ Resources:
                       FilterExpression='booking_id = :booking_id',
                       ExpressionAttributeValues={':booking_id': booking_id}
                   )
-                  
+
                   if existing_feedback['Items']:
                       return response_with_cors(400, {'error': 'Feedback already submitted for this booking'})
-                  
+
                   # Analyze sentiment
                   sentiment = analyze_sentiment(comment, rating)
-                  
+
                   feedback_id = str(uuid.uuid4())
                   feedback_data = {
                       'feedback_id': feedback_id,
@@ -1308,21 +1365,321 @@ Resources:
                       'rating': rating,
                       'comment': comment,
                       'sentiment': sentiment,
-                      'createdAt': datetime.now().isoformat()
+                      'type': 'CUSTOMER_FEEDBACK', 
+                      'createdAt': datetime.now().isoformat(),
+                      'updatedAt': datetime.now().isoformat()
                   }
-                  
+
                   feedback_table.put_item(Item=feedback_data)
-                  
+
                   return response_with_cors(201, {
                       'feedback_id': feedback_id,
                       'sentiment': sentiment,
                       'message': 'Feedback submitted successfully'
                   })
-                  
+
               except Exception as e:
                   print(f"Error submitting feedback: {str(e)}")
                   return response_with_cors(500, {'error': 'Feedback submission failed'})
           
+
+          # Customer edit feedback function
+          def edit_customer_feedback(event, feedback_id, customer_id):
+              try:
+                  if not feedback_id:
+                      return response_with_cors(400, {'error': 'feedback_id is required'})
+
+                  body = json.loads(event['body']) if event.get('body') else {}
+                  rating = body.get('rating')
+                  comment = body.get('comment')
+                  
+                  if comment is not None:
+                      comment = comment.strip() if isinstance(comment, str) else str(comment).strip()
+
+                  if rating is None and comment is None:
+                      return response_with_cors(400, {'error': 'At least rating or comment must be provided'})
+
+                  if rating is not None and (not isinstance(rating, int) or rating < 1 or rating > 5):
+                      return response_with_cors(400, {'error': 'Rating must be an integer between 1 and 5'})
+
+                  feedback_table = dynamodb.Table(os.environ['FEEDBACK_TABLE'])
+                  
+                  # Get existing feedback
+                  feedback_response = feedback_table.get_item(Key={'feedback_id': feedback_id})
+
+                  if 'Item' not in feedback_response:
+                      return response_with_cors(404, {'error': 'Feedback not found'})
+
+                  feedback = feedback_response['Item']
+
+                  if feedback['customer_id'] != customer_id:
+                      return response_with_cors(403, {'error': 'Cannot edit feedback not owned by you'})
+
+                  if feedback.get('type') != 'CUSTOMER_FEEDBACK':
+                      return response_with_cors(400, {'error': 'Can only edit customer feedback'})
+
+                  update_expressions = []
+                  expression_values = {':updated': datetime.now().isoformat()}
+
+                  # rating update
+                  if rating is not None:
+                      update_expressions.append('rating = :rating')
+                      expression_values[':rating'] = rating
+
+                  # comment update
+                  if comment is not None:
+                      update_expressions.append('comment = :comment')
+                      expression_values[':comment'] = comment
+
+                  current_rating = rating if rating is not None else feedback.get('rating', 3)
+                  current_comment = comment if comment is not None else feedback.get('comment', '')
+                  
+                  sentiment = analyze_sentiment(current_comment, current_rating)
+                  update_expressions.append('sentiment = :sentiment')
+                  expression_values[':sentiment'] = sentiment
+
+                  update_expressions.append('updatedAt = :updated')
+
+                  expression_names = {}
+                  if comment is not None:
+                      expression_names['#comment'] = 'comment'
+                  if rating is not None:
+                      expression_names['#rating'] = 'rating'
+                  expression_names['#sentiment'] = 'sentiment'
+                  expression_names['#updatedAt'] = 'updatedAt'
+
+                  final_expressions = []
+                  for exp in update_expressions:
+                      if 'comment = :comment' in exp:
+                          final_expressions.append('#comment = :comment')
+                      elif 'rating = :rating' in exp:
+                          final_expressions.append('#rating = :rating')
+                      elif 'sentiment = :sentiment' in exp:
+                          final_expressions.append('#sentiment = :sentiment')
+                      elif 'updatedAt = :updated' in exp:
+                          final_expressions.append('#updatedAt = :updated')
+                      else:
+                          final_expressions.append(exp)
+
+                  feedback_table.update_item(
+                      Key={'feedback_id': feedback_id},
+                      UpdateExpression='SET ' + ', '.join(final_expressions),
+                      ExpressionAttributeNames=expression_names,
+                      ExpressionAttributeValues=expression_values
+                  )
+
+                  return response_with_cors(200, {
+                      'message': 'Feedback updated successfully',
+                      'feedback_id': feedback_id,
+                      'sentiment': sentiment
+                  })
+
+              except Exception as e:
+                  print(f"Error editing feedback: {str(e)}")
+                  print(f"Traceback: {traceback.format_exc()}")
+                  return response_with_cors(500, {'error': 'Feedback update failed'})
+
+
+
+          # Franchise reply to feedback 
+          def reply_to_feedback(event, feedback_id, franchise_id):
+              try:
+                  if not feedback_id:
+                      return response_with_cors(400, {'error': 'feedback_id is required'})
+
+                  body = json.loads(event['body']) if event.get('body') else {}
+                  comment = body.get('comment', '').strip()
+
+                  if not comment:
+                      return response_with_cors(400, {'error': 'comment is required'})
+
+                  feedback_table = dynamodb.Table(os.environ['FEEDBACK_TABLE'])
+                  
+                  feedback_response = feedback_table.get_item(Key={'feedback_id': feedback_id})
+
+                  if 'Item' not in feedback_response:
+                      return response_with_cors(404, {'error': 'Feedback not found'})
+
+                  feedback = feedback_response['Item']
+
+                  if feedback.get('franchise_id') != franchise_id:
+                      return response_with_cors(403, {'error': 'Cannot reply to feedback not for your bikes'})
+
+                  if feedback.get('type') != 'CUSTOMER_FEEDBACK':
+                      return response_with_cors(400, {'error': 'Can only reply to customer feedback'})
+
+                  # Check if franchise already replied
+                  existing_reply = feedback_table.query(
+                      IndexName='FeedbackReplies',
+                      KeyConditionExpression=Key('parent_feedback_id').eq(feedback_id),
+                      FilterExpression='franchise_id = :franchise_id AND #type = :type',
+                      ExpressionAttributeNames={'#type': 'type'},
+                      ExpressionAttributeValues={
+                          ':franchise_id': franchise_id,
+                          ':type': 'FRANCHISE_REPLY'
+                      }
+                  )
+
+                  if existing_reply['Items']:
+                      return response_with_cors(400, {'error': 'Franchise has already replied to this feedback'})
+
+                  reply_id = str(uuid.uuid4())
+                  reply_data = {
+                      'feedback_id': reply_id,
+                      'parent_feedback_id': feedback_id,
+                      'bike_id': feedback['bike_id'],
+                      'customer_id': feedback['customer_id'],
+                      'franchise_id': franchise_id,
+                      'comment': comment,
+                      'type': 'FRANCHISE_REPLY',
+                      'createdAt': datetime.now().isoformat(),
+                      'updatedAt': datetime.now().isoformat()
+                  }
+
+                  feedback_table.put_item(Item=reply_data)
+
+                  return response_with_cors(201, {
+                      'reply_id': reply_id,
+                      'message': 'Reply submitted successfully'
+                  })
+
+              except Exception as e:
+                  print(f"Error replying to feedback: {str(e)}")
+                  return response_with_cors(500, {'error': 'Reply submission failed'})
+
+          def edit_franchise_reply(event, reply_id, franchise_id):
+              try:
+                  if not reply_id:
+                      return response_with_cors(400, {'error': 'reply_id is required'})
+
+                  body = json.loads(event['body']) if event.get('body') else {}
+                  comment = body.get('comment', '').strip()
+
+                  if not comment:
+                      return response_with_cors(400, {'error': 'comment is required'})
+
+                  feedback_table = dynamodb.Table(os.environ['FEEDBACK_TABLE'])
+                  
+                  # Get existing reply
+                  reply_response = feedback_table.get_item(Key={'feedback_id': reply_id})
+
+                  if 'Item' not in reply_response:
+                      return response_with_cors(404, {'error': 'Reply not found'})
+
+                  reply = reply_response['Item']
+
+                  if reply.get('franchise_id') != franchise_id:
+                      return response_with_cors(403, {'error': 'Cannot edit reply not owned by you'})
+
+                  if reply.get('type') != 'FRANCHISE_REPLY':
+                      return response_with_cors(400, {'error': 'Can only edit franchise replies'})
+
+                  feedback_table.update_item(
+                      Key={'feedback_id': reply_id},
+                      UpdateExpression='SET #comment = :comment, updatedAt = :updated',
+                      ExpressionAttributeNames={'#comment': 'comment'},
+                      ExpressionAttributeValues={
+                          ':comment': comment,
+                          ':updated': datetime.now().isoformat()
+                      }
+                  )
+
+
+                  return response_with_cors(200, {'message': 'Reply updated successfully'})
+
+              except Exception as e:
+                  print(f"Error editing reply: {str(e)}")
+                  return response_with_cors(500, {'error': 'Reply update failed'})
+
+          def get_franchise_feedback(franchise_id, query_params):
+              try:
+                  bike_id = query_params.get('bike_id')
+                  
+                  feedback_table = dynamodb.Table(os.environ['FEEDBACK_TABLE'])
+
+                  if bike_id:
+                      # Get feedback for specific bike
+                      bikes_table = dynamodb.Table(os.environ['BIKES_TABLE'])
+                      bike_response = bikes_table.get_item(Key={'bike_id': bike_id})
+                      
+                      if 'Item' not in bike_response:
+                          return response_with_cors(404, {'error': 'Bike not found'})
+                      
+                      bike = bike_response['Item']
+                      if bike.get('franchise_id') != franchise_id:
+                          return response_with_cors(403, {'error': 'Access denied'})
+
+                      feedback_response = feedback_table.query(
+                          IndexName='BikeFeedback',
+                          KeyConditionExpression=Key('bike_id').eq(bike_id),
+                          FilterExpression='#type = :type',
+                          ExpressionAttributeNames={'#type': 'type'},
+                          ExpressionAttributeValues={':type': 'CUSTOMER_FEEDBACK'},
+                          ScanIndexForward=False
+                      )
+                  else:
+                      # Get all feedback for franchise
+                      feedback_response = feedback_table.query(
+                          IndexName='FranchiseFeedback',
+                          KeyConditionExpression=Key('franchise_id').eq(franchise_id),
+                          FilterExpression='#type = :type',
+                          ExpressionAttributeNames={'#type': 'type'},
+                          ExpressionAttributeValues={':type': 'CUSTOMER_FEEDBACK'},
+                          ScanIndexForward=False
+                      )
+
+                  feedback_list = []
+                  for item in feedback_response['Items']:
+                      # Get customer details
+                      users_table = dynamodb.Table(os.environ['USERS_TABLE'])
+                      customer_response = users_table.get_item(Key={'userId': item['customer_id']})
+                      customer_info = customer_response.get('Item', {})
+
+                      # Get franchise reply if exists
+                      reply_response = feedback_table.query(
+                          IndexName='FeedbackReplies',
+                          KeyConditionExpression=Key('parent_feedback_id').eq(item['feedback_id']),
+                          FilterExpression='#type = :type',
+                          ExpressionAttributeNames={'#type': 'type'},
+                          ExpressionAttributeValues={':type': 'FRANCHISE_REPLY'}
+                      )
+
+                      franchise_reply = None
+                      if reply_response['Items']:
+                          reply = reply_response['Items'][0]
+                          franchise_reply = {
+                              'reply_id': reply['feedback_id'],
+                              'comment': reply['comment'],
+                              'createdAt': reply['createdAt'],
+                              'updatedAt': reply.get('updatedAt', reply['createdAt'])
+                          }
+
+                      feedback_item = {
+                          'feedback_id': item['feedback_id'],
+                          'user_id': item["customer_id"],
+                          'bike_id': item['bike_id'],
+                          'customer_id': item['customer_id'],
+                          'customer_email': customer_info.get('email', 'N/A'),
+                          'booking_id': item['booking_id'],
+                          'rating': int(item['rating']),
+                          'comment': item.get('comment', ''),
+                          'sentiment': item.get('sentiment', 'neutral'),
+                          'createdAt': item['createdAt'],
+                          'updatedAt': item.get('updatedAt', item['createdAt']),
+                          'franchise_reply': franchise_reply
+                      }
+
+                      feedback_list.append(feedback_item)
+
+                  return response_with_cors(200, {
+                      'feedback': feedback_list,
+                      'total': len(feedback_list)
+                  })
+
+              except Exception as e:
+                  print(f"Error getting franchise feedback: {str(e)}")
+                  return response_with_cors(500, {'error': 'Database query failed'})
+                
           def send_message(event, user_id, user_type):
               try:
                   body = json.loads(event['body']) if event.get('body') else {}
@@ -1555,23 +1912,20 @@ Resources:
           # UTILITY FUNCTIONS
           def analyze_sentiment(comment, rating):
               try:
-                  if comment and len(comment.strip()) > 0:
-                      # Use AWS Comprehend for sentiment analysis
-                      result = comprehend.detect_sentiment(Text=comment, LanguageCode='en')
-                      sentiment = result['Sentiment'].lower()
-                  else:
-                      # Fallback to rating-based sentiment
-                      if rating >= 4:
-                          sentiment = 'positive'
-                      elif rating == 3:
-                          sentiment = 'neutral'
-                      else:
-                          sentiment = 'negative'
+                  if not isinstance(rating, (int, float)) or rating < 1 or rating > 5:
+                      rating = 3  
                   
-                  return sentiment
+                  rating = int(rating)
                   
-              except Exception as e:
-                  print(f"Error analyzing sentiment: {str(e)}")
+                  if comment and isinstance(comment, str) and len(comment.strip()) > 0:
+                      try:
+                          result = comprehend.detect_sentiment(Text=comment.strip(), LanguageCode='en')
+                          sentiment = result['Sentiment'].lower()
+                          return sentiment
+                      except Exception as comprehend_error:
+                          print(f"Comprehend error: {str(comprehend_error)}")
+                          pass
+                  
                   # Fallback to rating-based sentiment
                   if rating >= 4:
                       return 'positive'
@@ -1579,6 +1933,12 @@ Resources:
                       return 'neutral'
                   else:
                       return 'negative'
+                      
+              except Exception as e:
+                  print(f"Error analyzing sentiment: {str(e)}")
+                  return 'neutral'
+
+
           
           def generate_access_code():
               return ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
@@ -1899,6 +2259,49 @@ Resources:
       ParentId: !Ref FranchiseResource
       PathPart: 'conversations'
 
+  FeedbackResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ParentId: !Ref FranchiseResource
+      PathPart: 'feedback'
+
+  FeedbackIdResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ParentId: !Ref FeedbackResource
+      PathPart: '{feedback_id}'
+
+  FeedbackReplyResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ParentId: !Ref FeedbackIdResource
+      PathPart: 'reply'
+
+  FeedbackRepliesResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ParentId: !Ref FeedbackResource
+      PathPart: 'replies'
+
+  FeedbackReplyIdResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ParentId: !Ref FeedbackRepliesResource
+      PathPart: '{reply_id}'
+
+  # Customer Feedback Edit Resource
+  BikeFeedbackIdResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ParentId: !Ref BikeFeedbackResource
+      PathPart: '{feedback_id}'
+
   # API METHODS
 
   # Public Methods (No Authentication Required)
@@ -2152,6 +2555,93 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
 
+  BikeFeedbackPutMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref BikeFeedbackIdResource
+      HttpMethod: PUT
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref CognitoAuthorizer
+      RequestParameters:
+        method.request.path.bike_id: true
+        method.request.path.feedback_id: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
+
+  BikeFeedbackOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref BikeFeedbackIdResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: false
+            method.response.header.Access-Control-Allow-Methods: false
+            method.response.header.Access-Control-Allow-Origin: false
+
+
+  # Franchise: Get all feedback
+  FranchiseFeedbackGetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref FeedbackResource
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref CognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
+
+  FeedbackReplyPostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref FeedbackReplyResource
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref CognitoAuthorizer
+      RequestParameters:
+        method.request.path.feedback_id: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
+
+  FeedbackReplyPutMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGatewayId
+      ResourceId: !Ref FeedbackReplyIdResource
+      HttpMethod: PUT
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref CognitoAuthorizer
+      RequestParameters:
+        method.request.path.reply_id: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnifiedAPIFunction.Arn}/invocations'
+
   # LAMBDA PERMISSIONS
   PublicBikesLambdaPermission:
     Type: AWS::Lambda::Permission
@@ -2234,6 +2724,22 @@ Outputs:
   FranchiseConversationsEndpoint:
     Description: 'Franchise Conversations List API Endpoint (Auth Required)'
     Value: !Sub 'https://${APIGatewayId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/franchise/conversations'
+
+  CustomerEditFeedbackEndpoint:
+    Description: 'Customer Edit Feedback API Endpoint (Auth Required)'
+    Value: !Sub 'https://${APIGatewayId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/bikes/{bike_id}/feedback/{feedback_id}'
+
+  FranchiseFeedbackEndpoint:
+    Description: 'Franchise Feedback Management API Endpoint (Auth Required)'
+    Value: !Sub 'https://${APIGatewayId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/franchise/feedback'
+
+  FranchiseFeedbackReplyEndpoint:
+    Description: 'Franchise Feedback Reply API Endpoint (Auth Required)'
+    Value: !Sub 'https://${APIGatewayId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/franchise/feedback/{feedback_id}/reply'
+
+  FranchiseEditReplyEndpoint:
+    Description: 'Franchise Edit Reply API Endpoint (Auth Required)'
+    Value: !Sub 'https://${APIGatewayId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/franchise/feedback/replies/{reply_id}'
 
   # Table Names
   BikesTableName:
