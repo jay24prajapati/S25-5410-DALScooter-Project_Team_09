@@ -4,7 +4,7 @@ import axios from 'axios';
 const API_BASE = import.meta.env.VITE_API_BASE;
 
 export default function BikeManagementSection() {
-  const token = localStorage.getItem('accessToken'); // ✅ updated from idToken
+  const token = localStorage.getItem('idToken'); // ✅ updated from idToken
   const [bikes, setBikes] = useState([]);
   const [editBike, setEditBike] = useState(null);
   const [showAddBike, setShowAddBike] = useState(false);
@@ -46,7 +46,8 @@ export default function BikeManagementSection() {
         features: newBike.features,
         count
       }, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json' }
       });
       await fetchBikes();
       setShowAddBike(false);
@@ -72,7 +73,8 @@ export default function BikeManagementSection() {
         features: editBike.features,
         count
       }, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json' }
       });
       console.log('Update success:', res.status);
       setEditBike(null);
