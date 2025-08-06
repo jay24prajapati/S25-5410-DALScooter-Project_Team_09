@@ -1,0 +1,487 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: 'DALScooter Athena Query Module - Lambda functions for user statistics via Athena, integrated with DALScooterAPI'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: 'DALScooter'
+    Description: 'Project name for resource naming'
+  
+  Environment:
+    Type: String
+    Default: 'dev'
+    AllowedValues:
+      - dev
+      - prod
+    Description: 'Environment name'
+  
+  UsersTableName:
+    Type: String
+    Description: 'Name of the Users table from Module 1'
+    Default: 'DALScooter-Users-dev'
+  
+  AthenaResultsBucketName:
+    Type: String
+    Description: 'Name for the S3 bucket for Athena query results'
+    Default: 'dalscooter-athena-results'
+  
+  RestApiId:
+    Type: String
+    Description: 'ID of the existing DALScooterAPI from DalScooter_Auth_01'
+    Default: 'lpid4zt080'
+  
+  RootResourceId:
+    Type: String
+    Description: 'Root resource ID of the existing DALScooterAPI'
+    Default: 'd9uirurtw2'
+
+Resources:
+  AthenaResultsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref AthenaResultsBucketName
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireResultsAfter7Days
+            Status: Enabled
+            ExpirationInDays: 7
+            NoncurrentVersionExpirationInDays: 7
+
+  GlueDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: 'default'
+        Description: 'Glue database for DALScooter Athena queries'
+
+  GlueUsersTable:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref GlueDatabase
+      TableInput:
+        Name: !Sub 'dalscooter_users_${Environment}'
+        Description: 'Glue table for Users DynamoDB table'
+        TableType: EXTERNAL_TABLE
+        Parameters:
+          classification: dynamodb
+          'dynamodb.table.name': !Ref UsersTableName
+        StorageDescriptor:
+          Columns:
+            - Name: userId
+              Type: string
+            - Name: email
+              Type: string
+            - Name: userType
+              Type: string
+            - Name: verificationStatus
+              Type: string
+            - Name: registrationDate
+              Type: string
+            - Name: isActive
+              Type: boolean
+          Location: !Ref UsersTableName
+          SerdeInfo:
+            SerializationLibrary: 'org.apache.hadoop.hive.dynamodb.DynamoDBHiveSerDe'
+            Parameters:
+              'dynamodb.table.name': !Ref UsersTableName
+              'dynamodb.region': !Ref AWS::Region
+
+  UserStatsLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-UserStats-${Environment}'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !Sub 'arn:aws:iam::${AWS::AccountId}:role/LabRole'
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref AthenaResultsBucket
+          GLUE_DATABASE: !Ref GlueDatabase
+          USERS_TABLE: 'dalscooter_users_dev'
+          ENVIRONMENT: !Ref Environment
+          PROJECT_NAME: !Ref ProjectName
+      Code:
+        ZipFile: |
+          import boto3
+          import time
+          import json
+          import traceback
+          import os
+
+          athena_client = boto3.client('athena')
+
+          def lambda_handler(event, context):
+              try:       
+                  users_table = f"{os.environ['USERS_TABLE']}"
+
+                  queries = [
+                      {
+                          "key": "total_users",
+                          "query": f"""
+                          SELECT usertype as user_type, COUNT(*) as total_users
+                          FROM \"{users_table}\"
+                          GROUP BY usertype;
+                          """
+                      },
+                      {
+                          "key": "registration_trends",
+                          "query": f"""
+                          SELECT DATE_FORMAT(from_iso8601_timestamp(registrationdate), '%Y-%m-%d') as reg_date,
+                                 usertype as user_type,
+                                 COUNT(*) as reg_count
+                          FROM \"{users_table}\"
+                          WHERE registrationdate IS NOT NULL
+                            AND registrationdate <> ''
+                          GROUP BY DATE_FORMAT(from_iso8601_timestamp(registrationdate), usertype;
+                          """
+                      },
+                      {
+                          "key": "verification_status",
+                          "query": f"""
+                          SELECT usertype as user_type,
+                                 verificationstatus as verification_status,
+                                 COUNT(*) as user_count
+                          FROM \"{users_table}\"
+                          GROUP BY usertype, verificationstatus;
+                          """
+                      }
+                  ]
+
+                  database = 'default'
+                  output_location = f"s3://{os.environ['S3_BUCKET']}/"
+                  results = {}
+                  
+                  for q in queries:
+                      print(f"Executing query: {q['key']} for table {users_table}")
+                      response = athena_client.start_query_execution(
+                          QueryString=q["query"],
+                          QueryExecutionContext={'Database': database},
+                          ResultConfiguration={'OutputLocation': output_location}
+                      )
+                      query_execution_id = response['QueryExecutionId']
+                      
+                      max_attempts = 40
+                      attempt = 0
+                      while attempt < max_attempts:
+                          query_status = athena_client.get_query_execution(QueryExecutionId=query_execution_id)
+                          status = query_status['QueryExecution']['Status']['State']
+                          if status in ['SUCCEEDED', 'FAILED', 'CANCELLED']:
+                              break
+                          time.sleep(0.5)
+                          attempt += 1
+
+                      if status != 'SUCCEEDED':
+                          error_message = query_status['QueryExecution']['Status'].get('StateChangeReason', 'No detailed error message provided')
+                          print(f"Query {q['key']} failed with status {status}: {error_message}")
+                          return {
+                              'statusCode': 500,
+                              'body': json.dumps({
+                                  'error': f'Athena query {q["key"]} failed',
+                                  'details': error_message
+                              })
+                          }
+                      
+                      query_results = athena_client.get_query_results(QueryExecutionId=query_execution_id)
+                      rows = query_results['ResultSet']['Rows']
+                      headers = [col['VarCharValue'] for col in rows[0]['Data']]
+                      data = []
+                      for row in rows[1:]:
+                          row_data = {}
+                          for i, cell in enumerate(row['Data']):
+                              row_data[headers[i]] = cell.get('VarCharValue', '')
+                          data.append(row_data)
+                      results[q["key"]] = data
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps(results)
+                  }
+              
+              except Exception as e:
+                  print("Exception occurred:", traceback.format_exc())
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': str(e)})
+                  }
+
+  UserStats1Lambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: 'DalScooter-UserStats1'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !Sub 'arn:aws:iam::${AWS::AccountId}:role/LabRole'
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref AthenaResultsBucketName
+          GLUE_DATABASE: !Ref GlueDatabase
+          USERS_TABLE: 'dalscooter_users_dev'
+          ENVIRONMENT: !Ref Environment
+          PROJECT_NAME: !Ref ProjectName
+      Code:
+        ZipFile: |
+          import boto3
+          import time
+          import json
+          import traceback
+          import os
+
+          athena_client = boto3.client('athena')
+
+          def lambda_handler(event, context):
+              try:       
+                  users_table = f"{os.environ['USERS_TABLE']}"
+
+                  queries = [
+                      {
+                          "key": "active_users",
+                          "query": f"""
+                          SELECT usertype as user_type,
+                                 isactive as is_active,
+                                 COUNT(*) as user_count
+                          FROM \"{users_table}\"
+                          GROUP BY usertype, isactive;
+                          """
+                      },
+                      {
+                          "key": "verification_completion_rate",
+                          "query": f"""
+                          SELECT usertype as user_type,
+                                 COUNT(CASE WHEN verificationstatus = 'verified' THEN 1 END) * 100.0 / COUNT(*) as verification_rate
+                          FROM \"{users_table}\"
+                          GROUP BY usertype;
+                          """
+                      }
+                  ]
+
+                  database = 'default'
+                  output_location = f"s3://{os.environ['S3_BUCKET']}/"
+                  results = {}
+                  
+                  for q in queries:
+                      print(f"Executing query: {q['key']} for table {users_table} in catalog 'dalscooter', database '{database}'")
+                      print(f"Query: {q['query']}")
+                      response = athena_client.start_query_execution(
+                          QueryString=q["query"],
+                          QueryExecutionContext={'Database': database},
+                          ResultConfiguration={'OutputLocation': output_location}
+                      )
+                      query_execution_id = response['QueryExecutionId']
+                      
+                      max_attempts = 40
+                      attempt = 0
+                      while attempt < max_attempts:
+                          query_status = athena_client.get_query_execution(QueryExecutionId=query_execution_id)
+                          status = query_status['QueryExecution']['Status']['State']
+                          if status in ['SUCCEEDED', 'FAILED', 'CANCELLED']:
+                              break
+                          time.sleep(0.5)
+                          attempt += 1
+
+                      if status != 'SUCCEEDED':
+                          error_message = query_status['QueryExecution']['Status'].get('StateChangeReason', 'No detailed error message provided')
+                          print(f"Query {q['key']} failed with status {status}: {error_message}")
+                          return response_with_cors(500, {
+                              'error': f'Athena query {q["key"]} failed with status {status}',
+                              'details': error_message
+                          })
+                      
+                      query_results = athena_client.get_query_results(QueryExecutionId=query_execution_id)
+                      rows = query_results['ResultSet']['Rows']
+                      headers = [col['VarCharValue'] for col in rows[0]['Data']]
+                      data = []
+                      for row in rows[1:]:
+                          row_data = {}
+                          for i, cell in enumerate(row['Data']):
+                              row_data[headers[i]] = cell.get('VarCharValue', '')
+                          data.append(row_data)
+                      results[q["key"]] = data
+                  
+                  return response_with_cors(200, results)
+              
+              except Exception as e:
+                  print("Exception occurred:", traceback.format_exc())
+                  return response_with_cors(500, {'error': str(e)})
+          
+          def response_with_cors(status_code, body):
+              return {
+                  'statusCode': status_code,
+                  'headers': {
+                      'Access-Control-Allow-Origin': '*',
+                      'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+                      'Access-Control-Allow-Methods': 'GET,OPTIONS',
+                      'Content-Type': 'application/json'
+                  },
+                  'body': json.dumps(body)
+              }
+
+  AnalyticsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApiId
+      ParentId: !Ref RootResourceId
+      PathPart: 'analytics'
+
+  UserStatsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApiId
+      ParentId: !Ref AnalyticsResource
+      PathPart: 'userstats'
+
+  UserStats1Resource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApiId
+      ParentId: !Ref AnalyticsResource
+      PathPart: 'userstats1'
+
+  UserStatsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApiId
+      ResourceId: !Ref UserStatsResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UserStatsLambda.Arn}/invocations'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+        - StatusCode: 500
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+
+  UserStatsOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApiId
+      ResourceId: !Ref UserStatsResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+
+  UserStats1Method:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApiId
+      ResourceId: !Ref UserStats1Resource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UserStats1Lambda.Arn}/invocations'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+        - StatusCode: 500
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+
+  UserStats1OptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApiId
+      ResourceId: !Ref UserStats1Resource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+
+  UserStatsLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref UserStatsLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApiId}/*/GET/analytics/userstats'
+
+  UserStats1LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref UserStats1Lambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApiId}/*/GET/analytics/userstats1'
+
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - UserStatsMethod
+      - UserStatsOptionsMethod
+      - UserStats1Method
+      - UserStats1OptionsMethod
+    Properties:
+      RestApiId: !Ref RestApiId
+      StageName: !Ref Environment
+
+Outputs:
+  UserStatsApiEndpoint:
+    Description: 'API Gateway Endpoint for UserStats'
+    Value: !Sub 'https://${RestApiId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/analytics/userstats'
+    Export:
+      Name: !Sub '${AWS::StackName}-UserStatsApiEndpoint'
+
+  UserStats1ApiEndpoint:
+    Description: 'API Gateway Endpoint for UserStats1'
+    Value: !Sub 'https://${RestApiId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/analytics/userstats1'
+    Export:
+      Name: !Sub '${AWS::StackName}-UserStats1ApiEndpoint'
+
+  GlueDatabaseName:
+    Description: 'Glue Database Name for Athena Queries'
+    Value: !Ref GlueDatabase
+    Export:
+      Name: !Sub '${AWS::StackName}-GlueDatabaseName'
+
+  AthenaResultsBucketName:
+    Description: 'S3 Bucket for Athena Query Results'
+    Value: !Ref AthenaResultsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-AthenaResultsBucketName'
