@@ -7,7 +7,7 @@ import LoginPage from './pages/LoginPage';
 import ProtectedFranchiseRoute from './routes/ProtectedFranchiseRoute'; 
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import FranchiseDashboard from './pages/FranchiseDashboard.JSX';
+import FranchiseDashboard from './pages/FranchiseDashboard.jsx';
 import ForgotPassword from './pages/ForgotPassword.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
 import StatsPage from './pages/Analytics/Analytics.js';
